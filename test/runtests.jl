@@ -1,11 +1,10 @@
-using FixedEffectModels
+using GLFixedEffectModels
 
-tests = ["reg.jl", 
-		 "RegressionResult.jl", 
-		 "partial_out.jl"
+tests = ["fit.jl"
 		 ]
 
 println("Running tests:")
+
 
 for test in tests
 	try

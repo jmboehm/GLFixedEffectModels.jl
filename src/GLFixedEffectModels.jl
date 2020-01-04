@@ -6,90 +6,60 @@ module GLFixedEffectModels
 ## Dependencies
 ##
 ##############################################################################
-import Base: size, copyto!, getindex, length, fill!, eltype, length, view, adjoint
-import LinearAlgebra: mul!, rmul!, norm, Matrix, Diagonal, cholesky, cholesky!, Symmetric, Hermitian, rank, dot, eigen, axpy!, svd, I, Adjoint, diag, qr
-import LinearAlgebra.BLAS: gemm!
-import Statistics: mean, quantile
-import Printf: @sprintf
-import Distributions: Distribution, ccdf, TDist, FDist, Chisq
-import DataFrames: DataFrame, AbstractDataFrame, completecases, names!, ismissing
-import Combinatorics: combinations
-using GLM
-#import GLM: Link, linkfun, linkinv, mueta
-using CategoricalArrays
+using Base
+using LinearAlgebra
+using Statistics
+using Printf
 using FillArrays
-import StatsBase: coef, nobs, coeftable, vcov, predict, residuals, var, RegressionModel, model_response, stderror, confint, fit, CoefTable, dof_residual,  df_residual, r2, adjr2, deviance, mss, rss, islinear, response
-import StatsModels: @formula,  Formula, ModelFrame, ModelMatrix, Terms, coefnames, evalcontrasts, check_non_redundancy!
+using DataFrames
+using Distributions
 using Reexport
+using GLM
+using Combinatorics
+
 @reexport using StatsBase
 @reexport using StatsModels
-@reexport using FixedEffects
+
+using FixedEffects
 
 ##############################################################################
 ##
-## Exported methods and types 
+## Exported methods and types
 ##
 ##############################################################################
 
-export reg,
+export reg, nlreg,
 partial_out,
-allvars,
-fes,
-WeightFormula,
-
-AbstractRegressionResult,
-title,
-top,
-RegressionResult,
-RegressionResultIV,
-RegressionResultFE,
-RegressionResultFEIV,
-
-AbstractVcovFormula, 
-VcovSimpleFormula, 
-VcovRobustFormula, 
-VcovClusterFormula,
-VcovFormula,
-
-AbstractVcovMethod, 
-VcovMethod,
-VcovSimpleMethod, 
-VcovWhiteMethod, 
-VcovClusterMethod,
-
-vcov!,
-shat!,
+fe,
+GLFixedEffectModel,
+has_fe,
+Vcov,
 VcovData,
 
-Model,
-@model
+#deprecated
+@model,
+fes
 
 ##############################################################################
 ##
 ## Load files
 ##
 ##############################################################################
-include("utils/model.jl")
-include("utils/weights.jl")
+include("GLFixedEffectModel.jl")
+include("utils/tss.jl")
 include("utils/fixedeffects.jl")
 include("utils/basecol.jl")
-include("utils/tss.jl")
 
-include("formula/formula_iv.jl")
-include("formula/formula_fe.jl")
+include("utils/ranktest.jl")
+include("utils/formula.jl")
 
+include("vcov/Vcov.jl")
 
-include("RegressionResult.jl")
+include("fit.jl")
 
-include("vcov/types.jl")
-include("vcov/vcovsimple.jl")
-include("vcov/vcovrobust.jl")
-include("vcov/vcovcluster.jl")
-include("vcov/utils.jl")
+# precompile script
+df = DataFrame(y = [1, 1], x =[1, 2], id = [1, 1])
+nlreg(df, @formula(y ~ x + fe(id)), Binomial(), GLM.LogitLink())
+#nlreg(df, @formula(y ~ x), Vcov.cluster(:id))
 
-include("reg.jl")
-include("partial_out.jl")
-
-
-
-end  # module FixedEffectModels
+end

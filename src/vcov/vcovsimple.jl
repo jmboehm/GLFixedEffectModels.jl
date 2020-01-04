@@ -1,14 +1,17 @@
-VcovFormula(::Type{Val{:simple}}) = VcovSimpleFormula()
+struct SimpleCovariance <: CovarianceEstimator end
 
-struct VcovSimpleFormula <: AbstractVcovFormula end
+simple() = SimpleCovariance()
 
+# function S_hat(x::RegressionModel, ::SimpleCovariance)
+# 	rmul!(crossmodelmatrix(x), sum(abs2, residuals(x)))
+# end
+#
+# function StatsBase.vcov(x::RegressionModel, ::SimpleCovariance)
+#     invcrossmodelmatrix = Matrix(inv(crossmodelmatrix(x)))
+#     rmul!(invcrossmodelmatrix, sum(abs2, residuals(x)) /  dof_residual(x))
+#     Symmetric(invcrossmodelmatrix)
+# end
 
-struct VcovSimpleMethod <: AbstractVcovMethod end
-VcovMethod(::AbstractDataFrame, ::VcovSimpleFormula) = VcovSimpleMethod()
-
-function vcov!(::VcovSimpleMethod, x::VcovData)
-    invcrossmatrix = inv(x.crossmatrix)
-    rmul!(invcrossmatrix, sum(abs2, x.residuals) /  x.dof_residual)
-    return invcrossmatrix
+function StatsBase.vcov(x::VcovData, ::SimpleCovariance)
+	return Symmetric(inv(cholesky(x.hessian)))
 end
-shat!(::VcovSimpleMethod, x::VcovData) = scale(x.crossmatrix, sumabs2(x.residuals))

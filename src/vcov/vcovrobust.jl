@@ -1,33 +1,32 @@
-VcovFormula(::Type{Val{:robust}}) = VcovRobustFormula()
+struct RobustCovariance <: CovarianceEstimator end
 
-struct VcovRobustFormula <: AbstractVcovFormula  end
+robust() = RobustCovariance()
 
+# function S_hat(x::RegressionModel, ::RobustCovariance)
+#     m = modelmatrix(x)
+#     r = residuals(x)
+#     X2 = zeros(size(m, 1), size(m, 2) * size(r, 2))
+#     index = 0
+#     for k in 1:size(r, 2)
+#         for j in 1:size(m, 2)
+#             index += 1
+#             for i in 1:size(m, 1)
+#                 X2[i, index] = m[i, j] * r[i, k]
+#             end
+#         end
+#     end
+#     S2 = X2' * X2
+#     Symmetric(rmul!(S2, size(m, 1) / dof_residual(x)))
+# end
+#
+# function StatsBase.vcov(x::RegressionModel, v::RobustCovariance)
+#     xtx = inv(crossmodelmatrix(x))
+#     pinvertible(Symmetric(xtx * S_hat(x, v) * xtx))
+# end
 
-struct VcovRobustMethod <: AbstractVcovMethod end
-VcovMethod(::AbstractDataFrame, ::VcovRobustFormula) = VcovRobustMethod()
-
-function vcov!(v::VcovRobustMethod, x::VcovData) 
-    S = shat!(v, x)
-    return sandwich(x.crossmatrix, S) 
+function StatsBase.vcov(x::VcovData, v::RobustCovariance)
+    R = cholesky(x.hessian)
+    A = inv(R)
+    B = x.gradient' * x.gradient
+    return Symmetric(A * B * A)
 end
-
-
-# S_{(l-1) * K + k, (l'-1)*K + k'} = \sum_i X[i, k] res[i, l] X[i, k'] res[i, l']
-function shat!(::VcovRobustMethod, x::VcovData{T, N}) where {T, N}
-    dim = size(x.regressors, 2) * size(x.residuals, 2)
-    X2 = fill(zero(Float64), size(x.regressors, 1), dim)
-    index = 0
-    for k in 1:size(x.residuals, 2)
-        for j in 1:size(x.regressors, 2)
-            index += 1
-            @inbounds @simd for i in 1:size(x.regressors, 1)
-                X2[i, index] = x.regressors[i, j] * x.residuals[i, k]
-            end
-        end
-    end
-    S2 = X2' * X2
-    rmul!(S2, size(x.regressors, 1) / x.dof_residual)
-    return S2
-end
-
-
