@@ -1,6 +1,6 @@
 using GLFixedEffectModels
 
-tests = ["fit.jl"
+tests = ["nlreg.jl"
 		 ]
 
 println("Running tests:")
