@@ -1,4 +1,4 @@
-/bak/*
-/benchmark/*
-/dataset/*
+/bak
+/benchmark
+/dataset
 /test/predict.jl
