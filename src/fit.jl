@@ -347,7 +347,7 @@ function nlreg(@nospecialize(df),
         # update FixedEffectSolver
         weights = Weights(Ones{Float64}(sum(esample)))
         feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
-        newfes, b, c = solve_coefficients!(oldy - oldX * coef, feM; tol = center_tol, maxiter = maxiter_center)
+        newfes, b, c = solve_coefficients!(eta - oldX * coef, feM; tol = center_tol, maxiter = maxiter_center)
         for j in 1:length(fes)
             if nobs < length(esample)
                 augmentdf[!, ids[j]] = Vector{Union{Float64, Missing}}(missing, length(esample))

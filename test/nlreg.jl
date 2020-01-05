@@ -43,6 +43,8 @@ x = GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.LogitLink(), start = [0.2] 
 m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy) + GLFixedEffectModels.fe(RandomCategorical)
 x = GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.LogitLink(), start = [0.2] )
 @test coef(x) ≈ [8.3927666] atol = 1e-4
+# make sure that showing works
+@show x
 
 # VCov
 m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy)
@@ -57,6 +59,23 @@ x = GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.LogitLink(), GLFixedEffectM
 m = GLFixedEffectModels.@formula binary ~ SepalWidth + PetalLength + GLFixedEffectModels.fe(SpeciesDummy)
 x = GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.LogitLink(), GLFixedEffectModels.Vcov.cluster(:SpeciesDummy,:RandomCategorical) , start = [0.2, 0.2] )
 @test vcov(x) ≈ [ 1.32851  -1.11561; -1.11561  6.55242] atol = 1e-4
+
+# Save fe
+m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy)
+x = GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.LogitLink(), start = [0.2] , save = :fe )
+fes = Float64[]
+for c in levels(df.SpeciesDummy)
+    push!(fes, x.augmentdf[df.SpeciesDummy .== c, :fe_SpeciesDummy][1])
+end
+@test fes[1] ≈ -28.3176042490 atol = 1e-4
+@test fes[2] ≈ -17.507252832 atol = 1e-4
+@test fes[3] ≈ -17.851658274 atol = 1e-4
+
+
+result = Alpaca.feglm(df, Alpaca.@formula(binary ~ SepalWidth ),
+    Binomial(),
+    fe = :SpeciesDummy,
+    start = [0.2], trace = 2)
 
 # For comparison with Alpaca.jl
 # result = Alpaca.feglm(df, Alpaca.@formula(binary ~ SepalWidth + PetalLength),
