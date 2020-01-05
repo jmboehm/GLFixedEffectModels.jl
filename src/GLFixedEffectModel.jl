@@ -29,6 +29,7 @@ struct GLFixedEffectModel <: RegressionModel
     dof_residual::Int64     # nobs - degrees of freedoms
 
     deviance::Float64            # Deviance of the fitted model
+    nulldeviance::Float64        # Null deviance, i.e. deviance of model with constant only
 
     gradient::Matrix{Float64}   # concentrated gradient
     hessian::Matrix{Float64}    # concentrated hessian
@@ -42,19 +43,29 @@ has_fe(x::GLFixedEffectModel) = has_fe(x.formula)
 # fields
 StatsBase.coef(x::GLFixedEffectModel) = x.coef
 StatsBase.coefnames(x::GLFixedEffectModel) = x.coefnames
+StatsBase.responsename(x::GLFixedEffectModel) = string(x.yname)
 StatsBase.vcov(x::GLFixedEffectModel) = x.vcov
 StatsBase.nobs(x::GLFixedEffectModel) = x.nobs
 StatsBase.dof_residual(x::GLFixedEffectModel) = x.dof_residual
 StatsBase.islinear(x::GLFixedEffectModel) = (x.link == IdentityLink() ? true : false)
 StatsBase.deviance(x::GLFixedEffectModel) = x.deviance
-#StatsBase.nulldeviance(x::GLFixedEffectModel)
-# StatsBase.rss(x::GLFixedEffectModel) = x.rss
-# StatsBase.mss(x::GLFixedEffectModel) = deviance(x) - rss(x)
+StatsBase.nulldeviance(x::GLFixedEffectModel) = x.nulldeviance
 
 function StatsBase.confint(x::GLFixedEffectModel, level::Real = 0.95)
     scale = quantile(Normal(), 1. - (1. - level)/2.)
     se = stderror(x)
     hcat(x.coef -  scale * se, x.coef + scale * se)
+end
+StatsBase.loglikelihood(x::GLFixedEffectModel) = error("loglikelihood is not yet implemented for $(typeof(x)).")
+StatsBase.nullloglikelihood(x::GLFixedEffectModel) = error("nullloglikelihood is not yet implemented for $(typeof(x)).")
+# TODO: check whether this is equal to x.gradient
+StatsBase.score(x::GLFixedEffectModel) = error("score is not yet implemented for $(typeof(x)).")
+
+function StatsBase.predict(x::GLFixedEffectModel, df::AbstractDataFrame)
+    error("predict is not yet implemented for $(typeof(x)).")
+end
+function StatsBase.residuals(x::GLFixedEffectModel, df::AbstractDataFrame)
+    error("residuals is not yet implemented for $(typeof(x)).")
 end
 
 # predict, residuals, modelresponse

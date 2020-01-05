@@ -427,8 +427,8 @@ function nlreg(@nospecialize(df),
         formula_schema,
         nobs,   # Number of observations
         dof_residual_,  # nobs - degrees of freedoms
-
         dev, # Deviance of the fitted model
+        nulldev, # null deviance
         score,   # concentrated gradient
         hessian  # concentrated hessian
     )

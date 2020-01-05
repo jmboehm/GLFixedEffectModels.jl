@@ -8,7 +8,7 @@
 ![Lifecycle](https://img.shields.io/badge/lifecycle-dormant-blue.svg) -->
 [![Build Status](https://travis-ci.org/jmboehm/GLFixedEffectModels.svg?branch=master)](https://travis-ci.org/jmboehm/GLFixedEffectModels.jl) [![Coverage Status](https://coveralls.io/repos/jmboehm/GLFixedEffectModels.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/jmboehm/GLFixedEffectModels.jl?branch=master)
 
-This package estimates generalized linear models with high dimensional categorical variables. It builds on Matthieu Gomez's [FixedEffects.jl](https://github.com/matthieugomez/FixedEffects.jl) and Amrei Stammann's [Alpaca](https://github.com/amrei-stammann/alpaca).
+This package estimates generalized linear models with high dimensional categorical variables. It builds on Matthieu Gomez's [FixedEffects.jl](https://github.com/FixedEffects/FixedEffects.jl) and Amrei Stammann's [Alpaca](https://github.com/amrei-stammann/alpaca).
 
 # Installation
 
@@ -26,16 +26,16 @@ df = dataset("datasets", "iris")
 df.binary = zeros(Float64, size(df,1))
 df[df.SepalLength .> 5.0,:binary] .= 1.0
 df.SpeciesDummy = categorical(df.Species)
-idx = rand(rng,1:3,size(df,1),1)
+idx = rand(1:3,size(df,1),1)
 a = ["A","B","C"]
 df.Random = vec([a[i] for i in idx])
 df.RandomCategorical = categorical(df.Random)
 
-m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy)
-GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.LogitLink(), start = [0.2] )
+m = @formula binary ~ SepalWidth + fe(SpeciesDummy)
+x = nlreg(df, m, Binomial(), LogitLink(), start = [0.2] )
 
-m = GLFixedEffectModels.@formula binary ~ SepalWidth + PetalLength + GLFixedEffectModels.fe(SpeciesDummy)
-GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.LogitLink(), GLFixedEffectModels.Vcov.cluster(:SpeciesDummy,:RandomCategorical) , start = [0.2, 0.2] )
+m = @formula binary ~ SepalWidth + PetalLength + fe(SpeciesDummy)
+nlreg(df, m, Binomial(), LogitLink(), Vcov.cluster(:SpeciesDummy,:RandomCategorical) , start = [0.2, 0.2] )
 ```
 
 # Things that still need to be implemented
