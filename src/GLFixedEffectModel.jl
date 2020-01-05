@@ -43,7 +43,7 @@ has_fe(x::GLFixedEffectModel) = has_fe(x.formula)
 # fields
 StatsBase.coef(x::GLFixedEffectModel) = x.coef
 StatsBase.coefnames(x::GLFixedEffectModel) = x.coefnames
-StatsBase.responsename(x::GLFixedEffectModel) = string(x.yname)
+responsename(x::GLFixedEffectModel) = string(x.yname)
 StatsBase.vcov(x::GLFixedEffectModel) = x.vcov
 StatsBase.nobs(x::GLFixedEffectModel) = x.nobs
 StatsBase.dof_residual(x::GLFixedEffectModel) = x.dof_residual

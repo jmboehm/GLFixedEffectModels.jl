@@ -35,7 +35,7 @@ GLFixedEffectModel,
 has_fe,
 Vcov,
 VcovData,
-
+responsename,
 #deprecated
 @model,
 fes
@@ -46,10 +46,10 @@ fes
 ##
 ##############################################################################
 include("GLFixedEffectModel.jl")
+
 include("utils/tss.jl")
 include("utils/fixedeffects.jl")
 include("utils/basecol.jl")
-
 include("utils/ranktest.jl")
 include("utils/formula.jl")
 
