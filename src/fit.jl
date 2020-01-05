@@ -245,7 +245,6 @@ function nlreg(@nospecialize(df),
         feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
 
         # # Pseudo-demean variables
-        # initialize iterations and converged
         iterations = Int[]
         convergeds = Bool[]
         nudemean, b, c = FixedEffects.solve_residuals!(nu, feM; maxiter = maxiter_center, tol = center_tol)
@@ -259,9 +258,6 @@ function nlreg(@nospecialize(df),
         # to obtain the correct projections, we need to weigh the demeaned nu and X
         nudemean = sqrtw .* nudemean
         Xdemean = Diagonal(sqrtw) * Xdemean
-
-        # @show nudemean
-        # @show Xdemean
 
         iterations = maximum(iterations)
         converged = all(convergeds)
@@ -277,11 +273,9 @@ function nlreg(@nospecialize(df),
         crossx = cholesky!(Symmetric(Xhat' * Xhat))
 
         beta_update = crossx \ (Xhat' * nudemean)
-        # @show beta_update
 
         # # Update \eta
         eta_update = nu_orig - (nudemean - Xdemean * beta_update) ./ sqrtw
-        # @show eta_update
 
         verbose && println("Old dev: $dev")
         devold = dev
@@ -304,12 +298,6 @@ function nlreg(@nospecialize(df),
             end
         end
 
-        # # Final computations and leave maximization routine
-        # D.alpha <- eta - X %*% beta
-        # G <- M[, seq(2L, p + 1L), drop = FALSE] * M[, 1L]
-        # break
-        # }
-
         if ((devold - dev)/dev < dev_tol)
             verbose && println("Iter $i : converged (deviance)")
             outer_converged = true
@@ -321,8 +309,6 @@ function nlreg(@nospecialize(df),
 
         if outer_converged
             # # Compute concentrated Score and Hessian
-            # G <- M[, - 1L, drop = FALSE] * M[, 1L]
-            # H <- crossprod(M[, - 1L])
             score = Xdemean .* nudemean
             hessian = Symmetric(Xdemean' * Xdemean)
             outer_iterations = i
@@ -401,31 +387,8 @@ function nlreg(@nospecialize(df),
 
     vcov_data = VcovData(Xhat, crossx, residuals, dof_residual_, score, hessian)
 
-    # Compute rss, tss, r2, r2 adjusted
-    # rss = sum(abs2, residuals)
-    # mss = tss_total - rss
-    # r2 = 1 - rss / tss_total
-    # adjr2 = 1 - rss / tss_total * (nobs - (has_intercept | has_fe_intercept)) / dof_residual_
-    # if has_fes
-    #     r2_within = 1 - rss / tss_partial
-    # end
-    #
     # Compute standard error
     matrix_vcov = StatsBase.vcov(vcov_data, vcov_method)
-    #
-    # # Compute Fstat
-    # F = Fstat(coef, matrix_vcov, has_intercept)
-    # df_FStat_ = max(1, Vcov.df_FStat(vcov_data, vcov_method, has_intercept | has_fe_intercept))
-    # p = ccdf(FDist(max(length(coef) - (has_intercept | has_fe_intercept), 1), df_FStat_), F)
-    #
-    # # Compute Fstat of First Stage
-    # if has_iv
-    #     Pip = Pi[(size(Pi, 1) - size(Z_res, 2) + 1):end, :]
-    #     r_kp = ranktest!(Xendo_res, Z_res, Pip,
-    #                               vcov_method, size(X, 2), dof_absorb)
-    #     p_kp = ccdf(Chisq((size(Z_res, 2) - size(Xendo_res, 2) +1 )), r_kp)
-    #     F_kp = r_kp / size(Z_res, 2)
-    # end
 
     ##############################################################################
     ##
@@ -470,9 +433,4 @@ function nlreg(@nospecialize(df),
         hessian  # concentrated hessian
     )
 
-    # return FixedEffectModel(coef, matrix_vcov, vcov, nclusters, esample, augmentdf,
-    #                         coef_names, response_name, formula_origin, formula_schema, nobs, dof_residual_,
-    #                         rss, tss_total, r2, adjr2, F, p,
-    #                         iterations, converged, r2_within,
-    #                         F_kp, p_kp)
 end

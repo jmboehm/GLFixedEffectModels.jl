@@ -40,6 +40,7 @@ GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.LogitLink(), GLFixedEffectModel
 
 # Things that still need to be implemented
 
+- Test saving fixed effects
 - Better default starting values
 - Bias correction
 - Weights
