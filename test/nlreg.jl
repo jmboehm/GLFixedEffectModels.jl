@@ -71,12 +71,6 @@ end
 @test fes[2] ≈ -17.507252832 atol = 1e-4
 @test fes[3] ≈ -17.851658274 atol = 1e-4
 
-
-result = Alpaca.feglm(df, Alpaca.@formula(binary ~ SepalWidth ),
-    Binomial(),
-    fe = :SpeciesDummy,
-    start = [0.2], trace = 2)
-
 # For comparison with Alpaca.jl
 # result = Alpaca.feglm(df, Alpaca.@formula(binary ~ SepalWidth + PetalLength),
 #     Binomial(),
