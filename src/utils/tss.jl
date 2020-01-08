@@ -7,16 +7,16 @@ function tss(y::AbstractVector, hasintercept::Bool, weights::AbstractWeights)
     end
 end
 
-function Fstat(coef::Vector{Float64}, matrix_vcov::AbstractMatrix{Float64}, has_intercept::Bool)
-    coefF = copy(coef)
-    # TODO: check I can't do better
-    length(coef) == has_intercept && return NaN
-    if has_intercept
-        coefF = coefF[2:end]
-        matrix_vcov = matrix_vcov[2:end, 2:end]
-    end
-    return (coefF' * (matrix_vcov \ coefF)) / length(coefF)
-end
+# function Fstat(coef::Vector{Float64}, matrix_vcov::AbstractMatrix{Float64}, has_intercept::Bool)
+#     coefF = copy(coef)
+#     # TODO: check I can't do better
+#     length(coef) == has_intercept && return NaN
+#     if has_intercept
+#         coefF = coefF[2:end]
+#         matrix_vcov = matrix_vcov[2:end, 2:end]
+#     end
+#     return (coefF' * (matrix_vcov \ coefF)) / length(coefF)
+# end
 
 
 ##############################################################################
