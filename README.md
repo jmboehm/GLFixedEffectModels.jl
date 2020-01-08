@@ -56,7 +56,7 @@ The required arguments are:
 
 The optional arguments are:
 * `save::Union{Bool, Symbol} = false`: Should residuals and eventual estimated fixed effects saved in a dataframe? Use `save = :residuals` to only save residuals. Use `save = :fe` to only save fixed effects.
-* `method::Symbol = :lsmr`: Method to deman regressors. `:lsmr` is akin to conjugate gradient descent.  To use LSMR on multiple cores, use `:lsmr_parallel`. To use LSMR with multiple threads,  use `lsmr_threads`. To use LSMR on GPU, use `lsmr_gpu`(requires `CuArrays`. Use the option `double_precision = false` to use `Float32` on the GPU.). This option is the same as for the [FixedEffectModels.jl](https://github.com/FixedEffects/FixedEffectModels.jl) package.
+* `method::Symbol`: A symbol for the method. Default is `:cpu`. Alternatively, `:gpu` requires `CuArrays`. In this case, use the option `double_precision = false` to use `Float32`. This option is the same as for the [FixedEffectModels.jl](https://github.com/FixedEffects/FixedEffectModels.jl) package.
 * `contrasts::Dict = Dict()` An optional Dict of contrast codings for each categorical variable in the `formula`.  Any unspecified variables will have `DummyCoding`.
 * `maxiter::Integer = 1000`: Maximum number of iterations in the Newton-Raphson routine.
 * `maxiter_center::Integer = 10000`: Maximum number of iterations for centering procedure.
@@ -74,6 +74,15 @@ The optional arguments are:
 - Better StatsBase interface & prediction
 - Better benchmarking
 - Integration with [RegressionTables.jl](https://github.com/jmboehm/RegressionTables.jl)
+
+## Related Julia packages
+
+- [FixedEffectModels.jl](https://github.com/FixedEffects/FixedEffectModels.jl) estimates linear models with high dimensional categorical variables (and with or without endogeneous regressors).
+- [FixedEffects.jl](https://github.com/FixedEffects/FixedEffects.jl) is a package for fast pseudo-demeaning operations using LSMR. Both this package and [FixedEffectModels.jl](https://github.com/FixedEffects/FixedEffectModels.jl) build on this.
+- [Alpaca.jl](https://github.com/jmboehm/Alpaca.jl) is a wrapper to the [Alpaca R package](https://github.com/amrei-stammann/alpaca), which solves the same tasks as this package.
+- [GLM.jl](https://github.com/JuliaStats/GLM.jl) estimates generalized linear models, but without explicit support for categorical regressors.
+- [Econometrics.jl](https://github.com/Nosferican/Econometrics.jl) provides routines to estimate multinomial logit and other models.
+- [RegressionTables.jl](https://github.com/jmboehm/RegressionTables.jl) will, in the future, support pretty printing of results from this package.
 
 ## References
 

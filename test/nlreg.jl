@@ -1,8 +1,7 @@
 using GLFixedEffectModels
 
-using GLM
-using RDatasets, Test, Distributions
-using Random
+using GLM, Distributions
+using RDatasets, Test, Random
 
 # using Alpaca
 
