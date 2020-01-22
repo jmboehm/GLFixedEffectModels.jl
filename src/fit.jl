@@ -115,6 +115,7 @@ function nlreg(@nospecialize(df),
     vars = StatsModels.termvars(formula)
     all_vars = unique(vars)
 
+    # TODO speedup: this takes 4.8k
     esample = completecases(df, all_vars)
     if has_weights
         esample .&= BitArray(!ismissing(x) & (x > 0) for x in df[!, weights])
@@ -160,6 +161,7 @@ function nlreg(@nospecialize(df),
     ##
     ##############################################################################
     exo_vars = unique(StatsModels.termvars(formula))
+    # TODO speedup: 8.3k
     subdf = StatsModels.columntable(disallowmissing(view(df, esample, exo_vars)))
     formula_schema = apply_schema(formula, schema(formula, subdf, contrasts), GLFixedEffectModel, has_fe_intercept)
 
@@ -193,6 +195,11 @@ function nlreg(@nospecialize(df),
         oldy = deepcopy(y)
         oldX = deepcopy(Xexo)
     end
+
+    # construct fixed effects object and solver
+    fes = FixedEffect[_subset(fe, esample) for fe in fes]
+    weights = Weights(Ones{Float64}(sum(esample)))
+    feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
 
     # some constants
     coeflength = length(coef_names) # TODO this should really be better
@@ -235,14 +242,11 @@ function nlreg(@nospecialize(df),
         # make a copy of nu because it's being changed by solve_residuals!
         nu_orig = deepcopy(nu)
 
-        # Update weights
+        # Update weights and FixedEffectSolver object
         weights = Weights(wtildesq)
         all(isfinite, values(weights)) || throw("Weights are not finite")
         sqrtw = sqrt.(values(weights))
-
-        # construct fixed effects object and solver
-        fes = FixedEffect[_subset(fe, esample) for fe in fes]
-        feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
+        FixedEffects.update_weights!(feM, weights)
 
         # # Pseudo-demean variables
         iterations = Int[]
