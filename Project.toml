@@ -1,7 +1,7 @@
 name = "GLFixedEffectModels"
 uuid = "bafb0ae5-e5f5-5100-81b6-6a55d777c812"
 authors = ["Johannes Boehm <johannes.boehm@gmail.com>"]
-version = "0.0.2"
+version = "0.0.3"
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
