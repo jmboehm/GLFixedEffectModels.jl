@@ -5,7 +5,7 @@
 ##
 ##############################################################################
 
-struct GLFixedEffectModel <: TableRegressionModel
+struct GLFixedEffectModel <: StatsModels.TableRegressionModel
     coef::Vector{Float64}   # Vector of coefficients
     vcov::Matrix{Float64}   # Covariance matrix
     vcov_type::CovarianceEstimator
