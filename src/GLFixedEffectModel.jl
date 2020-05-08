@@ -5,7 +5,7 @@
 ##
 ##############################################################################
 
-struct GLFixedEffectModel <: StatsModels.TableRegressionModel
+struct GLFixedEffectModel <: RegressionModel
     coef::Vector{Float64}   # Vector of coefficients
     vcov::Matrix{Float64}   # Covariance matrix
     vcov_type::CovarianceEstimator
@@ -43,7 +43,7 @@ has_fe(x::GLFixedEffectModel) = has_fe(x.formula)
 # fields
 StatsBase.coef(x::GLFixedEffectModel) = x.coef
 StatsBase.coefnames(x::GLFixedEffectModel) = x.coefnames
-responsename(x::GLFixedEffectModel) = string(x.yname)
+StatsBase.responsename(x::GLFixedEffectModel) = string(x.yname)
 StatsBase.vcov(x::GLFixedEffectModel) = x.vcov
 StatsBase.nobs(x::GLFixedEffectModel) = x.nobs
 StatsBase.dof_residual(x::GLFixedEffectModel) = x.dof_residual
