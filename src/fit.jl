@@ -244,8 +244,8 @@ function nlreg(@nospecialize(df),
 
         # Update weights and FixedEffectSolver object
         weights = Weights(wtildesq)
-        all(isfinite, values(weights)) || throw("Weights are not finite")
-        sqrtw = sqrt.(values(weights))
+        all(isfinite, weights) || throw("Weights are not finite")
+        sqrtw = sqrt.(weights)
         FixedEffects.update_weights!(feM, weights)
 
         # # Pseudo-demean variables
