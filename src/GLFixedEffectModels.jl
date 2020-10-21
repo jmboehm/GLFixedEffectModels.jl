@@ -28,17 +28,13 @@ using FixedEffects
 ##
 ##############################################################################
 
-export reg, nlreg,
-partial_out,
+export nlreg,
 fe,
 GLFixedEffectModel,
 has_fe,
 Vcov,
 VcovData,
-responsename,
-#deprecated
-@model,
-fes
+responsename
 
 ##############################################################################
 ##
