@@ -161,8 +161,7 @@ function nlreg(@nospecialize(df),
     ##
     ##############################################################################
     exo_vars = unique(StatsModels.termvars(formula))
-    # TODO speedup: 8.3k
-    subdf = StatsModels.columntable(disallowmissing(view(df, esample, exo_vars)))
+    subdf = Tables.columntable((; (x => disallowmissing(view(df[!, x], esample)) for x in exo_vars)...))
     formula_schema = apply_schema(formula, schema(formula, subdf, contrasts), GLFixedEffectModel, has_fe_intercept)
 
     # Obtain y
@@ -202,7 +201,7 @@ function nlreg(@nospecialize(df),
     feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
 
     # some constants
-    coeflength = length(coef_names) # TODO this should really be better
+    coeflength = size(Xexo,2)
 
     if start != nothing
         (length(start) == coeflength) || error("Invalid length of `start` argument.")
@@ -262,7 +261,7 @@ function nlreg(@nospecialize(df),
         # to obtain the correct projections, we need to weigh the demeaned nu and X
         nudemean = sqrtw .* nudemean
         Xdemean = Diagonal(sqrtw) * Xdemean
-
+        
         iterations = maximum(iterations)
         converged = all(convergeds)
 

@@ -4,14 +4,14 @@
 ##
 ##############################################################################
 
-eachterm(x::AbstractTerm) = (x,)
-eachterm(x::NTuple{N, AbstractTerm}) where {N} = x
+eachterm(@nospecialize(x::AbstractTerm)) = (x,)
+eachterm(@nospecialize(x::NTuple{N, AbstractTerm})) where {N} = x
 TermOrTerms = Union{AbstractTerm, NTuple{N, AbstractTerm} where N}
-hasintercept(t::TermOrTerms) =
+hasintercept(@nospecialize(t::TermOrTerms)) =
     InterceptTerm{true}() ∈ terms(t) ||
     ConstantTerm(1) ∈ terms(t)
-omitsintercept(f::FormulaTerm) = omitsintercept(f.rhs)
-omitsintercept(t::TermOrTerms) =
+omitsintercept(@nospecialize(f::FormulaTerm)) = omitsintercept(f.rhs)
+omitsintercept(@nospecialize(t::TermOrTerms)) =
     InterceptTerm{false}() ∈ terms(t) ||
     ConstantTerm(0) ∈ terms(t) ||
     ConstantTerm(-1) ∈ terms(t)
@@ -24,10 +24,14 @@ omitsintercept(t::TermOrTerms) =
 function parse_iv(@nospecialize(f::FormulaTerm))
 	for term in eachterm(f.rhs)
 		if term isa FormulaTerm
-			formula_endo = FormulaTerm(ConstantTerm(0), tuple(ConstantTerm(0), eachterm(term.lhs)...))
-			formula_iv = FormulaTerm(ConstantTerm(0), tuple(ConstantTerm(0), eachterm(term.rhs)...))
-            exos = Tuple((term for term in eachterm(f.rhs) if !isa(term, FormulaTerm)))
-            return FormulaTerm(f.lhs, exos), formula_endo, formula_iv
+            both = intersect(eachterm(term.lhs), eachterm(term.rhs))
+            endos = setdiff(eachterm(term.lhs), both)
+            exos = setdiff(eachterm(term.rhs), both)
+            !isempty(endos) && !isempty(exos) || throw("Model not identified. There must be at least as many ivs as endogeneneous variables")
+			formula_endo = FormulaTerm(ConstantTerm(0), tuple(ConstantTerm(0), endos...))
+			formula_iv = FormulaTerm(ConstantTerm(0), tuple(ConstantTerm(0), exos...))
+            formula_exo = FormulaTerm(f.lhs, tuple((term for term in eachterm(f.rhs) if !isa(term, FormulaTerm))..., both...))
+            return formula_exo, formula_endo, formula_iv
 		end
 	end
 	return f, nothing, nothing
@@ -43,12 +47,13 @@ struct FixedEffectTerm <: AbstractTerm
 end
 StatsModels.termvars(t::FixedEffectTerm) = [t.x]
 fe(x::Term) = FixedEffectTerm(Symbol(x))
+fe(s::Symbol) = FixedEffectTerm(s)
 
 has_fe(::FixedEffectTerm) = true
 has_fe(::FunctionTerm{typeof(fe)}) = true
 has_fe(t::InteractionTerm) = any(has_fe(x) for x in t.terms)
 has_fe(::AbstractTerm) = false
-has_fe(t::FormulaTerm) = any(has_fe(x) for x in eachterm(t.rhs))
+has_fe(@nospecialize(t::FormulaTerm)) = any(has_fe(x) for x in eachterm(t.rhs))
 
 
 fesymbol(t::FixedEffectTerm) = t.x
@@ -66,7 +71,7 @@ function parse_fixedeffect(df::AbstractDataFrame, @nospecialize(formula::Formula
         end
     end
     if !isempty(fes)
-        if any(fe.interaction isa Ones for fe in fes)
+        if any(fe.interaction isa UnitWeights for fe in fes)
             formula = FormulaTerm(formula.lhs, tuple(InterceptTerm{false}(), (term for term in eachterm(formula.rhs) if (term != ConstantTerm(1)) & (term != InterceptTerm{true}()) & !has_fe(term))...))
         else
             formula = FormulaTerm(formula.lhs, Tuple(term for term in eachterm(formula.rhs) if !has_fe(term)))
@@ -90,35 +95,22 @@ function parse_fixedeffect(df::AbstractDataFrame, t::InteractionTerm)
     if !isempty(fes)
         # x1&x2 from (x1&x2)*id
         fe_names = [fesymbol(x) for x in fes]
-        fe = FixedEffect(group((df[!, fe_name] for fe_name in fe_names)...); interaction = _multiply(df, Symbol.(interactions)))
+        v1 = _multiply(df, Symbol.(interactions))
+        fe = FixedEffect((df[!, fe_name] for fe_name in fe_names)...; interaction = v1)
         interactions = setdiff(Symbol.(terms(t)), fe_names)
         s = vcat(["fe_" * string(fe_name) for fe_name in fe_names], string.(interactions))
         return fe, Symbol(reduce((x1, x2) -> x1*"&"*x2, s))
     end
 end
 
-function _multiply(df, ss::Vector)
+function _multiply(df, ss::AbstractVector)
     if isempty(ss)
-        out = Ones(size(df, 1))
+        return uweights(size(df, 1))
+    elseif length(ss) == 1
+        # in case it has missing (for some reason *(missing) not defined))
+        # do NOT use ! since it would modify the vector
+        return convert(AbstractVector{Float64}, replace(df[!, ss[1]], missing => 0))
     else
-        out = ones(size(df, 1))
-        for j in eachindex(ss)
-            _multiply!(out, df[!, ss[j]])
-        end
-    end
-    return out
-end
-
-function _multiply!(out, v)
-    if v isa CategoricalVector
-        throw("Fixed Effects cannot be interacted with Categorical Vector. Use fe(x)&fe(y)")
-    end
-    for i in eachindex(out)
-        if v[i] === missing
-            # may be missing when I remove singletons
-            out[i] = 0.0
-        else
-            out[i] = out[i] * v[i]
-        end
+        return convert(AbstractVector{Float64}, replace!(.*((df[!, x] for x in ss)...), missing => 0))
     end
 end
