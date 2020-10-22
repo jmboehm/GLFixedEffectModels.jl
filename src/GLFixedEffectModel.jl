@@ -39,11 +39,11 @@ end
 has_fe(x::GLFixedEffectModel) = has_fe(x.formula)
 
 
-# Check API at  https://github.com/JuliaStats/StatsBase.jl/blob/11a44398bdc16a00060bc6c2fb65522e4547f159/src/statmodels.jl
+# Check API at  https://github.com/JuliaStats/StatsBase.jl/blob/65351de819ca64941cb81c047e4b77157446f7c5/src/statmodels.jl
 # fields
 StatsBase.coef(x::GLFixedEffectModel) = x.coef
 StatsBase.coefnames(x::GLFixedEffectModel) = x.coefnames
-responsename(x::GLFixedEffectModel) = string(x.yname)
+StatsBase.responsename(x::GLFixedEffectModel) = string(x.yname)
 StatsBase.vcov(x::GLFixedEffectModel) = x.vcov
 StatsBase.nobs(x::GLFixedEffectModel) = x.nobs
 StatsBase.dof_residual(x::GLFixedEffectModel) = x.dof_residual

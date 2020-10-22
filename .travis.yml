@@ -1,13 +1,12 @@
 language: julia
 julia:
-- 1.5
-- nightly
+  - 1.5
+  - nightly
+notifications:
+  email: false
 matrix:
   allow_failures:
     - julia: nightly
 after_success:
 - julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
-notifications:
-  email:
-    on_success: never
-    on_failure: change
+

@@ -39,6 +39,7 @@ df.RandomCategorical = categorical(df.Random)
 m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy)
 x = GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.LogitLink(), start = [0.2] )
 @test coef(x) ≈ [8.144352] atol = 1e-4
+
 # Two FE, Logit
 m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy) + GLFixedEffectModels.fe(RandomCategorical)
 x = GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.LogitLink(), start = [0.2] )
