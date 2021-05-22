@@ -12,6 +12,7 @@ using Statistics
 using Printf
 using FillArrays
 using DataFrames
+using CategoricalArrays
 using Distributions
 using Reexport
 using GLM
@@ -53,7 +54,7 @@ include("vcov/Vcov.jl")
 include("fit.jl")
 
 # precompile script
-df = DataFrame(y = [1, 1], x =[1, 2], id = [1, 1])
+df = DataFrame(y = rand(10), x = 1:10, id = repeat([1, 2], 5))
 nlreg(df, @formula(y ~ x + fe(id)), Binomial(), GLM.LogitLink())
 
 end
