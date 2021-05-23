@@ -6,7 +6,7 @@
 ![Lifecycle](https://img.shields.io/badge/lifecycle-retired-orange.svg)
 ![Lifecycle](https://img.shields.io/badge/lifecycle-archived-red.svg)
 ![Lifecycle](https://img.shields.io/badge/lifecycle-dormant-blue.svg) -->
-[![Build Status](https://travis-ci.org/jmboehm/GLFixedEffectModels.jl.svg?branch=master)](https://travis-ci.org/jmboehm/GLFixedEffectModels.jl) [![Coverage Status](https://coveralls.io/repos/github/jmboehm/GLFixedEffectModels.jl/badge.svg?branch=master)](https://coveralls.io/github/jmboehm/GLFixedEffectModels.jl?branch=master)
+![example branch parameter](https://github.com/jmboehm/GLFixedEffectModels.jl/actions/workflows/ci.yml/badge.svg?branch=master) [![Coverage Status](https://coveralls.io/repos/github/jmboehm/GLFixedEffectModels.jl/badge.svg?branch=master)](https://coveralls.io/github/jmboehm/GLFixedEffectModels.jl?branch=master)
 
 This package estimates generalized linear models with high dimensional categorical variables. It builds on Matthieu Gomez's [FixedEffects.jl](https://github.com/FixedEffects/FixedEffects.jl) and Amrei Stammann's [Alpaca](https://github.com/amrei-stammann/alpaca).
 
