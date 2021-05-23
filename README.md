@@ -13,7 +13,7 @@ This package estimates generalized linear models with high dimensional categoric
 ## Installation
 
 ```
-] add https://github.com/jmboehm/GLFixedEffectModels.jl.git
+] add GLFixedEffectModels
 ```
 
 ## Example use
@@ -25,17 +25,16 @@ using RDatasets
 df = dataset("datasets", "iris")
 df.binary = zeros(Float64, size(df,1))
 df[df.SepalLength .> 5.0,:binary] .= 1.0
-df.SpeciesDummy = categorical(df.Species)
+df.SpeciesStr = string.(df.Species)
 idx = rand(1:3,size(df,1),1)
 a = ["A","B","C"]
 df.Random = vec([a[i] for i in idx])
-df.RandomCategorical = categorical(df.Random)
 
-m = @formula binary ~ SepalWidth + fe(SpeciesDummy)
+m = @formula binary ~ SepalWidth + fe(Species)
 x = nlreg(df, m, Binomial(), LogitLink(), start = [0.2] )
 
-m = @formula binary ~ SepalWidth + PetalLength + fe(SpeciesDummy)
-nlreg(df, m, Binomial(), LogitLink(), Vcov.cluster(:SpeciesDummy,:RandomCategorical) , start = [0.2, 0.2] )
+m = @formula binary ~ SepalWidth + PetalLength + fe(Species)
+nlreg(df, m, Binomial(), LogitLink(), Vcov.cluster(:SpeciesStr,:Random) , start = [0.2, 0.2] )
 ```
 
 ## Documentation
