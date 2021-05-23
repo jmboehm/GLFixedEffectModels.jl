@@ -19,7 +19,7 @@ using GLM
 using Combinatorics
 
 @reexport using StatsBase
-@reexport using StatsModels
+@reexport using GLM
 
 using FixedEffects
 
