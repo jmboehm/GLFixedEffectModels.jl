@@ -5,6 +5,7 @@ using DataFrames
 using LinearAlgebra
 using FixedEffects
 using Combinatorics
+using CategoricalArrays
 
 import ..VcovData
 

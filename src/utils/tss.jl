@@ -33,6 +33,6 @@ struct VcovData{T, N} <: RegressionModel
     hessian::Symmetric{Float64,Array{Float64,2}}
 end
 StatsBase.modelmatrix(x::VcovData) = x.modelmatrix
-crossmodelmatrix(x::VcovData) = x.crossmodelmatrix
+StatsBase.crossmodelmatrix(x::VcovData) = x.crossmodelmatrix
 StatsBase.residuals(x::VcovData) = x.residuals
 StatsBase.dof_residual(x::VcovData) = x.dof_residual
