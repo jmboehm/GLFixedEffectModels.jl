@@ -2,6 +2,7 @@ function BiasCorr(model::GLFixedEffectModel,L::Int64,panel_structure::Any,df::Da
     # TO-DO: add choice of L (binwidth), see Hahn and Kuersteiner (2011)
     @assert ncol(model.augmentdf) > 1 "please save the entire augmented data frame in order to do bias correction"
     @assert panel_structure in ["classic", "network"] "you can only choose 'classic' or 'network' for panel_structure"
+    # TO-DO: different panel_structure only makes a difference when binwidth is not 0
     @assert typeof(model.distribution) <: Binomial "currently only support binomial distribution"
     @assert typeof(model.link) <: Union{GLM.LogitLink,GLM.ProbitLink} "currently only support probit and logit link"
     @assert ncol(model.augmentdf) in [3,4] "We only support two-way and three-way FE at the moment"
@@ -86,7 +87,7 @@ function groupSums(M::Array{Float64,2},w::Array{Float64,1},group_seg::Array{Arra
     return b_temp
 end
 
-function getGroupSeg(fe::Array{Any,1})
+function getGroupSeg(fe::Array{T,1} where T <: Any)
     theLevels = levels(fe)
 
     list_of_index = Array{Array{Bool,1},1}(undef,0)

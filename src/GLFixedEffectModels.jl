@@ -35,7 +35,8 @@ GLFixedEffectModel,
 has_fe,
 Vcov,
 VcovData,
-responsename
+responsename,
+BiasCorr
 
 ##############################################################################
 ##
