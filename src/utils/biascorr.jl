@@ -1,8 +1,24 @@
-function BiasCorr(model::GLFixedEffectModel,L::Int64,panel_structure::Any,df::DataFrame)
-    # TO-DO: add choice of L (binwidth), see Hahn and Kuersteiner (2011)
+"""
+    BiasCorr(model::GLFixedEffectModel,df::DataFrame;L::Int64=0,panel_structure::Any="classic")
+
+Asymptotic bias correction after fitting binary choice models with a two-/three-way error.
+
+# Arguments
+## Required Arguments
+- `model::Integer`: a `GLFixedEffectModel` object which can be obtained by using `nlreg()`.
+- `df::DataFrame`: the Data Frame on which you just run `nlreg()`.
+## Optional Arguments
+- `L:Int64`: choice of binwidth, see Hahn and Kuersteiner (2011). The default value is 0.
+- `panel_structure`: choose from "classic" or "network". The default value is "classic".
+
+# Notice
+This function only supports binomial distribution and probit/logit link. It also only supports two-way and three-way FE at the moment.
+Always turn on the save option when running `nlreg()` before invoking `BiasCorr()`.
+"""
+function BiasCorr(model::GLFixedEffectModel,df::DataFrame;L::Int64=0,panel_structure::Any="classic")
+    # TO-DO: add choice of L (binwidth)
     @assert ncol(model.augmentdf) > 1 "please save the entire augmented data frame in order to do bias correction"
     @assert panel_structure in ["classic", "network"] "you can only choose 'classic' or 'network' for panel_structure"
-    # TO-DO: different panel_structure only makes a difference when binwidth is not 0
     @assert typeof(model.distribution) <: Binomial "currently only support binomial distribution"
     @assert typeof(model.link) <: Union{GLM.LogitLink,GLM.ProbitLink} "currently only support probit and logit link"
     @assert ncol(model.augmentdf) in [3,4] "We only support two-way and three-way FE at the moment"

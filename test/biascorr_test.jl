@@ -20,4 +20,4 @@ df.RandomCategorical = df.Random
 # Two-way Logit
 m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy) + GLFixedEffectModels.fe(RandomCategorical)
 x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), start = [0.2], save=true)
-x_afterbc = GLFixedEffectModels.BiasCorr(x, 0, "classic", df)
+x_afterbc = GLFixedEffectModels.BiasCorr(x, df)
