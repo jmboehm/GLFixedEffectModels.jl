@@ -18,10 +18,10 @@ Always turn on the save option when running `nlreg()` before invoking `BiasCorr(
 function BiasCorr(model::GLFixedEffectModel,df::DataFrame;L::Int64=0,panel_structure::Any="classic")
     # TO-DO: add choice of L (binwidth)
     # UPDATE: The procedures that use the bandwidth L should be applied to the time dimension. 
-    #         alpaca::biasCorr in R didn't automatically distinguish between individual fe and time fe. 
+    #         alpaca::biasCorr in R doesn't automatically distinguish between individual fe and time fe. 
     #         When constructing Bhat (notation inhereted from Fernández-Val and Weidner, Annual Review of Economics (2018), pp120),
-    #         alpaca distinguish i dimension and t dimension according to the variable positions in the formula,
-    #         but this didn't show up in their documentation. 
+    #         alpaca distinguishes i dimension and t dimension according to the variable positions in the formula,
+    #         but this doesn't show up in their documentation. 
     #         This can lead to inaccurate results (one can test alpaca::biasCorr with L>0 and with two different formula y~x|i+t and y~x|t+i).
     #         Is this the best practice? should we also implemented the bandwidth this way? At least we need to include this in the user manual.
     # TO-DO: check if `df` is sorted. It must be sorted to produce the right result when L > 0
@@ -66,7 +66,7 @@ function BiasCorr(model::GLFixedEffectModel,df::DataFrame;L::Int64=0,panel_struc
         # assuming the time fe in the fomula always comes the last
         b += groupSumsSpectral(score ./ v .* w, v, w, L,getGroupSeg(fes[!,1]))
     else
-        # assuming that in the two-way network structure, the first two FEs are always it and jt.
+        # assuming that with network structure, the first two FEs are always it and jt.
         for fe in eachcol(fes)
             b += groupSums(MX_times_z, w, getGroupSeg(fe)) ./ 2.0
         end
