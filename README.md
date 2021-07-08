@@ -19,7 +19,7 @@ This package estimates generalized linear models with high dimensional categoric
 ## Example use
 
 ```julia
-using GLFixedEffectModels, GLM, Distributions
+using GLFixedEffectModels
 using RDatasets
 
 df = dataset("datasets", "iris")
