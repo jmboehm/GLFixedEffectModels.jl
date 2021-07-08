@@ -1,7 +1,7 @@
 using GLFixedEffectModels
 
 tests = ["nlreg.jl"
-		 ]
+		 "biascorr_test.jl"]
 
 println("Running tests:")
 
