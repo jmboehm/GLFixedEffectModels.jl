@@ -24,7 +24,7 @@ function BiasCorr(model::GLFixedEffectModel,df::DataFrame;L::Int64=0,panel_struc
     #         but this didn't show up in their documentation. 
     #         This can lead to inaccurate results (one can test alpaca::biasCorr with L>0 and with two different formula y~x|i+t and y~x|t+i).
     #         Is this the best practice? should we also implemented the bandwidth this way? At least we need to include this in the user manual.
-    # TO-DO: check if df is sorted. It must be sorted to produce the right result when panel_structure == "network" and L > 0
+    # TO-DO: check if `df` is sorted. It must be sorted to produce the right result when L > 0
     @assert ncol(model.augmentdf) > 1 "please save the entire augmented data frame in order to do bias correction"
     @assert panel_structure in ["classic", "network"] "you can only choose 'classic' or 'network' for panel_structure"
     @assert typeof(model.distribution) <: Binomial "currently only support binomial distribution"
@@ -66,7 +66,7 @@ function BiasCorr(model::GLFixedEffectModel,df::DataFrame;L::Int64=0,panel_struc
         # assuming the time fe in the fomula always comes the last
         b += groupSumsSpectral(score ./ v .* w, v, w, L,getGroupSeg(fes[!,1]))
     else
-        # assuming the in the two-way network structure, the first two FEs are always it and jt.
+        # assuming that in the two-way network structure, the first two FEs are always it and jt.
         for fe in eachcol(fes)
             b += groupSums(MX_times_z, w, getGroupSeg(fe)) ./ 2.0
         end
