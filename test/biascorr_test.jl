@@ -39,7 +39,7 @@ x_afterbc = GLFixedEffectModels.BiasCorr(x, df)
 @test x_afterbc.coef ≈ [coef1] atol = 1e-4
 
 # Test 2: Two-way Probit
-# Since the coefficients for models that uses the probit link didn't match the results from R's alpaca before bias correction
+# Since the coefficients for models that use the probit link didn't match the results from R's alpaca before bias correction
 # We test if the ``net adjusted value`` for the coefficients matches, for now.
 # TODO: check why probit link didn't work as expected
 R"""
