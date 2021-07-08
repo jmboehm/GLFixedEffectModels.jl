@@ -35,7 +35,8 @@ GLFixedEffectModel,
 has_fe,
 Vcov,
 VcovData,
-responsename
+responsename,
+BiasCorr
 
 ##############################################################################
 ##
@@ -48,6 +49,7 @@ include("utils/tss.jl")
 include("utils/fixedeffects.jl")
 include("utils/basecol.jl")
 include("utils/formula.jl")
+include("utils/biascorr.jl")
 
 include("vcov/Vcov.jl")
 
