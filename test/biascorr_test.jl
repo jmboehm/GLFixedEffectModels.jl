@@ -19,6 +19,9 @@ df.RandomCategorical = df.Random
 
 # Set up R
 using RCall
+R"""
+install.packages("alpaca")
+"""
 R"library(alpaca)"
 df_r = deepcopy(df)
 @rput df_r
