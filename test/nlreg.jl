@@ -32,6 +32,18 @@ df.RandomCategorical = df.Random
 # gm1 = fit(GeneralizedLinearModel, @formula(binary ~ SepalWidth),
 #               df, Poisson())
 
+# PROBIT ------------------------------------------------------------------
+# One FE, Probit
+m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy)
+x = GLFixedEffectModels.nlreg(df, m, Binomial(), ProbitLink(), start = [0.2])
+@test x.coef ≈ [4.7793003788996895] atol = 1e-4
+
+# Two FE, Probit
+m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy) + GLFixedEffectModels.fe(RandomCategorical)
+x = GLFixedEffectModels.nlreg(df, m, Binomial(), ProbitLink(), start = [0.2] )
+@test x.coef ≈ [4.734428099238226] atol = 1e-4
+# test target value obtained from alpaca::feglm with `dev.tol <- 1e-10`
+
 
 # LOGIT ------------------------------------------------------------------
 

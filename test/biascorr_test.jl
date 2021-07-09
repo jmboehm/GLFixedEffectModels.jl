@@ -39,26 +39,23 @@ x_afterbc = GLFixedEffectModels.BiasCorr(x, df)
 @test x_afterbc.coef ≈ [7.214197357443702] atol = 1e-4
 
 # Test 2: Two-way Probit
-# Since the coefficients for models that use the probit link didn't match the results from R's alpaca before bias correction
-# We test if the ``net adjusted value`` for the coefficients matches, for now.
-# TODO: check why probit link didn't work as expected
 
 #=R"""
-res2 <- alpaca::feglm(binary ~ SepalWidth | SpeciesDummy + RandomCategorical , df_r, binomial(link = "probit"), beta.start = c(0.2))
+control <- do.call(feglmControl,list())
+control[["dev.tol"]] <- 1e-10
+res2 <- alpaca::feglm(binary ~ SepalWidth | SpeciesDummy + RandomCategorical , df_r, binomial(link = "probit"), beta.start = c(0.2), control = control)
 res_bc2 <- alpaca::biasCorr(res2)
-coef2<- res2[["coefficients"]]
 coef2_afterbc <- res_bc2[["coefficients"]]
-net_adjusted_value = coef2_afterbc - coef2
 """
-@rget net_adjusted_value
+@rget coef2_afterbc
 ###############################
-net_adjusted_value = -0.5381054072387927
+coef2_afterbc = 4.1962783532153605
 ###############################
 =#
 
 x = GLFixedEffectModels.nlreg(df, m, Binomial(), ProbitLink(), start = [0.2], save=true)
 x_afterbc = GLFixedEffectModels.BiasCorr(x, df)
-@test x_afterbc.coef - x.coef ≈ [-0.5381054072387927] atol = 1e-4
+@test x_afterbc.coef ≈ [4.1962783532153605] atol = 1e-4
 
 # Test 3: Three-way Logit (I = 5, J = 6, T = 7), Network structure
 I, J, T = 5, 6, 7
