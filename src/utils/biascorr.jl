@@ -29,11 +29,11 @@
 #                  +---------+--------------------------+------------------------+----------------------+-------------------------------------------------------------------
 #                  |    3    |  i + j + t               |           NO           |          NO          |  Fernández-Val and Weidner (2018) 
 # -----------------+---------+--------------------------+------------------------+----------------------+-------------------------------------------------------------------
-#                  |    2    |  it + jt                 | YES (on standard error)|         YES          |  Weidner and Zylkin (2020)
+#                  |    2    |  it + jt                 | YES (on standard error)|                      |  Weidner and Zylkin (2020)
 #                  +---------+--------------------------+------------------------+----------------------+-------------------------------------------------------------------
 #     network      |    2    |  it + ij, jt + ij        |           ?            |          ?           |  ?
 #                  +---------+--------------------------+------------------------+----------------------+-------------------------------------------------------------------
-#                  |    2    |  it + jt + ij            |          YES           |         YES          |  Weidner and Zylkin (2020)
+#                  |    2    |  it + jt + ij            |          YES           |                      |  Weidner and Zylkin (2020)
 # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -230,6 +230,9 @@ function biasCorr_logit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::In
 end
 
 function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::Int64,panel_structure::String)
+    if L > 0
+        printstyled("bandwidth not allowed in poisson regression bias correction. Treating L as 0...",color=:yellow)
+    end
     # @assert panel_structure == "network"
     link = model.link
     y = df2[model.esample[df2.old_ind],model.yname] # Do we need to subset y with model.esample? TO-DO: test with cases with esample is not all ones.
@@ -244,7 +247,7 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         t_levels = levels(df2[model.esample[df2.old_ind],fes["it"][2]])
         I = length(i_levels)
         J = length(j_levels)
-        @assert I==J "number of exporters is different from number of importers"
+        # @assert I==J "number of exporters is different from number of importers"
         T = length(t_levels)
         
         # assume balanced panel
@@ -290,13 +293,13 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
                                 G[i,j,t,s,r] = - ϑ_ijt[i,j,t] * (1 - ϑ_ijt[i,j,t]) * (1 - 2*ϑ_ijt[i,j,t]) * y_sum_ij[i,j]
                             end
                             if s==r && r!=t
-                                G[i,j,t,s,r] = - ϑ_ijt[i,j,s] * (1 - 2*ϑ_ijt[i,j,s]) * ϑ_ijt[i,j,t] * y_sum_ij[i,j]
+                                G[i,j,t,s,r] =  ϑ_ijt[i,j,s] * (1 - 2*ϑ_ijt[i,j,s]) * ϑ_ijt[i,j,t] * y_sum_ij[i,j] ## Wrong sign?
                             end
                             if t==s && s!=r
-                                G[i,j,t,s,r] = - ϑ_ijt[i,j,s] * (1 - 2*ϑ_ijt[i,j,s]) * ϑ_ijt[i,j,r] * y_sum_ij[i,j]
+                                G[i,j,t,s,r] =  ϑ_ijt[i,j,s] * (1 - 2*ϑ_ijt[i,j,s]) * ϑ_ijt[i,j,r] * y_sum_ij[i,j] ## Wrong sign?
                             end
-                            if r==t && t!=s
-                                G[i,j,t,s,r] = - ϑ_ijt[i,j,t] * (1 - 2*ϑ_ijt[i,j,t]) * ϑ_ijt[i,j,s] * y_sum_ij[i,j]
+                            if r==t && t!=s 
+                                G[i,j,t,s,r] =  ϑ_ijt[i,j,t] * (1 - 2*ϑ_ijt[i,j,t]) * ϑ_ijt[i,j,s] * y_sum_ij[i,j] ## Wrong sign?
                             end
                             if r!=s && s!=t && t!=r
                                 G[i,j,t,s,r] = - 2 * ϑ_ijt[i,j,r] * ϑ_ijt[i,j,s] * ϑ_ijt[i,j,t] * y_sum_ij[i,j]
@@ -311,7 +314,6 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         X = df2[model.esample[df2.old_ind], model.coefnames] |> Array{Float64,2}
         weights = FixedEffects.Weights(λ)
         all(isfinite, weights) || throw("Weights are not finite")
-        sqrtw = sqrt.(weights)
         fes_fixedeffectarray = Array{FixedEffect,1}()
         for (fe_key,fe_symb) in fes
             fe_fixedeffectobject = FixedEffect(df2[model.esample[df2.old_ind], fe_symb[1]], df2[model.esample[df2.old_ind], fe_symb[2]])
@@ -322,11 +324,10 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         if !all(converged)
             @warn "Convergence of annihilation procedure not achieved in default iterations; try increasing maxiter_center or decreasing center_tol."
         end
-        #Xdemean = Xdemean .* sqrtw
         K = size(Xdemean,2)
         Xdemean_ijtk = reshape(Xdemean,(I,J,T,K))
-        # Construct B̂, D̂, and Ŵ
 
+        # Construct B̂, D̂, and Ŵ
         function G_ij_times_x_ijk(G_ij::Array{Float64,3},x_ijk::Array{Float64,1})
             T = length(x_ijk)
             @assert size(G_ij) == (T,T,T)
@@ -352,11 +353,13 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
                 Gx̃_fix_i = zeros(T,T)
                 SS_fix_i = zeros(T,T)
                 for j ∈ 1:J
+                    #if i != j # uncomment to not include terms where i==j
                     H̄_sum_along_j_fix_i += H̄[i,j,:,:]
                     Hx̃S_fix_i += H[i,j,:,:] * Xdemean_ijtk[i,j,:,k] * S_ijt[i,j,:]'
                     Gx̃_fix_i += G_ij_times_x_ijk(G[i,j,:,:,:], Xdemean_ijtk[i,j,:,k])
                     SS_fix_i += S_ijt[i,j,:] * S_ijt[i,j,:]'
                     Ŵ += Xdemean_ijtk[i,j,:,:]' * H̄[i,j,:,:] * Xdemean_ijtk[i,j,:,:]
+                    #end
                 end
                 H̄_pseudo_inv = pinv(H̄_sum_along_j_fix_i)
                 term1 = - H̄_pseudo_inv * Hx̃S_fix_i
@@ -378,12 +381,13 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
                 Gx̃_fix_j = zeros(T,T)
                 SS_fix_j = zeros(T,T)
                 for i ∈ 1:I
+                    #if i != j # uncomment to not include terms where i==j
                     H̄_sum_along_i_fix_j += H̄[i,j,:,:]
                     Hx̃S_fix_j += H[i,j,:,:] * Xdemean_ijtk[i,j,:,k] * S_ijt[i,j,:]'
                     Gx̃_fix_j += G_ij_times_x_ijk(G[i,j,:,:,:], Xdemean_ijtk[i,j,:,k])
                     SS_fix_j += S_ijt[i,j,:] * S_ijt[i,j,:]'
+                    #end
                 end
-                # println(H̄_sum_along_i_fix_j)
                 H̄_pseudo_inv = pinv(H̄_sum_along_i_fix_j)
                 term1 = - H̄_pseudo_inv * Hx̃S_fix_j
                 term2 = Gx̃_fix_j * H̄_pseudo_inv * SS_fix_j * H̄_pseudo_inv ./ 2.0
@@ -391,12 +395,10 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
             end
         end
         D̂ = D̂ ./ (N - 1)
-        println("B̂ = $B̂")
-        println("D̂ = $D̂")
         β = model.coef - Ŵ \ (B̂ + D̂) ./ (N-1)
-        ####### DIFFERENCE BETWEEN THIS AND PPML_FE_BIAS
-        #### 1. PPML_FE_BIAS didn't correct for degrees of freedom
-        #### 2. (Section A.2.1 Analytical Bias Correction Formula) PPML_FE_BIAS also add terms where i == j when constructing B̂ and D̂
+        ####### This function replicates the result from PPML_FE_BIAS.ado, but I also found something confusing when comparing the code with the paper
+        #### . (Section A.2.1 Analytical Bias Correction Formula) PPML_FE_BIAS.ado also add terms where i == j when constructing B̂ and D̂ (I add this in our code too to produce the exact same result)
+        #### . signs of some elements of G are different in the code and in the paper?? (might be their typo in the paper)
     end
 
     return GLFixedEffectModel(
@@ -532,6 +534,9 @@ function classic_b_binomial(score::Array{Float64,2},v::Array{Float64,1},z::Array
     b = zeros(P)
     if fes["t"] === nothing
         pseudo_panel = true
+        if L > 0
+            printstyled("bandwidth not allowed in classic ij-pseudo panel. Treating L as 0...")
+        end
     end
     for (fe_key,fe_symb) in fes
         if fe_symb !== nothing
