@@ -399,6 +399,8 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         ####### This function replicates the result from PPML_FE_BIAS.ado, but I also found something confusing when comparing the code with the paper
         #### . (Section A.2.1 Analytical Bias Correction Formula) PPML_FE_BIAS.ado also add terms where i == j when constructing B̂ and D̂ (I add this in our code too to produce the exact same result)
         #### . signs of some elements of G are different in the code and in the paper?? (might be their typo in the paper)
+    else
+        β = model.coef
     end
 
     return GLFixedEffectModel(
