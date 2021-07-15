@@ -501,6 +501,7 @@ function model_type_checker(x::Tuple,avail_list::Array{T} where T <: Any)
         if x[1] isa avail_type[1] && x[2] isa avail_type[2] && x[3] == avail_type[3] && x[4] == avail_type[4]
             return true
         end
+        return false
     end
 end
     

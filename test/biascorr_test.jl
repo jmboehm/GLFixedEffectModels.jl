@@ -92,7 +92,7 @@ x_bc_L0 = GLFixedEffectModels.BiasCorr(x, data; i_symb = :i, j_symb = :j, t_symb
 x_bc_L3 = GLFixedEffectModels.BiasCorr(x, data; i_symb = :i, j_symb = :j, t_symb = :t, panel_structure = "network", L = 3)
 @test x_bc_L0.coef ≈ [-0.5478161609879237] atol = 1e-4
 @test x_bc_L3.coef ≈ [-0.5950043813922534] atol = 1e-4 
-# we didn't use -0.6077559017896819 becuase in this network specification, alpaca will perform bandwidth on a refined dataset that deletes observation(s) due to perfect classification.
+# we didn't use -0.6077559017896819 because in this network specification, alpaca will perform bandwidth on a refined dataset that deletes observation(s) due to perfect classification.
 # we perform the bandwidth adjustment on the original dataset.
 
 # Test 4: Three-way Poisson, Network structure
