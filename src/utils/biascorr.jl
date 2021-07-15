@@ -400,6 +400,7 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         #### . (Section A.2.1 Analytical Bias Correction Formula) PPML_FE_BIAS.ado also add terms where i == j when constructing B̂ and D̂ (I add this in our code too to produce the exact same result)
         #### . signs of some elements of G are different in the code and in the paper?? (might be their typo in the paper)
     else
+        # no need to correct β
         β = model.coef
     end
 
@@ -503,8 +504,8 @@ function model_type_checker(x::Tuple,avail_list::Array{T} where T <: Any)
         if x[1] isa avail_type[1] && x[2] isa avail_type[2] && x[3] == avail_type[3] && x[4] == avail_type[4]
             return true
         end
-        return false
     end
+    return false
 end
     
 function parse_formula_get_FEs(model,panel_structure::Any,df::DataFrame)
