@@ -36,7 +36,7 @@ has_fe,
 Vcov,
 VcovData,
 responsename,
-BiasCorr
+bias_correction
 
 ##############################################################################
 ##

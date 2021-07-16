@@ -40,11 +40,11 @@
 
 
 ############################################################
-#                   Main Function BiasCorr()               #
+#                   Main Function bias_correction()               #
 ############################################################
 
 """
-    BiasCorr(model::GLFixedEffectModel,df::DataFrame;L::Int64=0,panel_structure::Any="classic")
+    bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{Symbol,Nothing}=nothing,j_symb::Union{Symbol,Nothing}=nothing,t_symb::Union{Symbol,Nothing}=nothing,L::Int64=0,panel_structure::Symbol=:classic)
 
 Asymptotic bias correction after fitting binary choice models with a two-/three-way error.
 
@@ -55,9 +55,9 @@ Asymptotic bias correction after fitting binary choice models with a two-/three-
 ## Optional Arguments
 - `L:Int64`: choice of binwidth, see Hahn and Kuersteiner (2011). The default value is 0.
 - `panel_structure`: choose from "classic" or "network". The default value is "classic".
-- `i_symb`
-- `j_symb`
-- `t_symb`
+- `i_symb`: the variable name for i index in the data frame `df`
+- `j_symb`: the variable name for j index in the data frame `df`
+- `t_symb`: the variable name for t index in the data frame `df`
 
 # Available Model
 We only support the following models:
@@ -69,9 +69,9 @@ We only support the following models:
 - Binomial regression, Probit link, Three-way, Network
 - Poisson regression, Log link, Three-way, Network
 """
-function BiasCorr(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{Symbol,Nothing}=nothing,j_symb::Union{Symbol,Nothing}=nothing,t_symb::Union{Symbol,Nothing}=nothing,L::Int64=0,panel_structure::Any="classic")
+function bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{Symbol,Nothing}=nothing,j_symb::Union{Symbol,Nothing}=nothing,t_symb::Union{Symbol,Nothing}=nothing,L::Int64=0,panel_structure::Symbol=:classic)
     @assert ncol(model.augmentdf) > 1 "please save the entire augmented data frame in order to do bias correction"
-    @assert panel_structure in ["classic", "network"] "you can only choose 'classic' or 'network' for panel_structure"
+    @assert panel_structure in [:classic, :network] "you can only choose :classic or :network for panel_structure"
     @assert typeof(model.distribution) <: Union{Binomial,Poisson} "currently only support binomial regression and poisson regression"
     @assert typeof(model.link) <: Union{GLM.LogitLink,GLM.ProbitLink,GLM.LogLink} "currently only support probit and logit link (binomial regression), and log link (poisson regression)"
 
@@ -82,26 +82,26 @@ function BiasCorr(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{Symbol,N
     @assert length(fes_in_formula) in [2,3] "We only support two-way and three-way FE at the moment"
     @assert all([symb ∈ [i_symb,j_symb,t_symb] for symb in cleaned_fe_symb]) "not all FEs in the formula is mentioned in i_symb, j_symb and t_symb"
     @assert all([(symb ∈ cleaned_fe_symb || symb === nothing) for symb in [i_symb,j_symb,t_symb]]) "redundant FEs in i_symb, j_symb or t_symb (not mentioned in the formula)"
-    if panel_structure == "classic"
-        fe_dict = Dict("i" => i_symb,"j" => j_symb,"t" => t_symb)
-    elseif panel_structure == "network"
-        fe_dict = Dict{String,Union{Array{Symbol,1},Nothing}}()
+    if panel_structure == :classic
+        fe_dict = Dict(:i => i_symb,:j => j_symb,:t => t_symb)
+    elseif panel_structure == :network
+        fe_dict = Dict{Symbol,Union{Array{Symbol,1},Nothing}}()
         if Symbol("fe_",i_symb,"&fe_",j_symb) ∈ fes_in_formula
-            push!(fe_dict, "ij" => [i_symb,j_symb])
+            push!(fe_dict, :ij => [i_symb,j_symb])
         else 
-            push!(fe_dict, "ij" => nothing)
+            push!(fe_dict, :ij => nothing)
         end
 
         if Symbol("fe_",i_symb,"&fe_",t_symb) ∈ fes_in_formula
-            push!(fe_dict, "it" => [i_symb,t_symb])
+            push!(fe_dict, :it => [i_symb,t_symb])
         else 
-            push!(fe_dict, "it" => nothing)
+            push!(fe_dict, :it => nothing)
         end
 
         if Symbol("fe_",j_symb,"&fe_",t_symb) ∈ fes_in_formula
-            push!(fe_dict, "jt" => [j_symb,t_symb])
+            push!(fe_dict, :jt => [j_symb,t_symb])
         else 
-            push!(fe_dict, "jt" => nothing)
+            push!(fe_dict, :jt => nothing)
         end
     end
     ##########################################################
@@ -113,14 +113,14 @@ function BiasCorr(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{Symbol,N
 
     # check if we currently support the combination of the distribution, the link, num of FEs and the panel_structure
     available_types = [
-        (LogitLink, Binomial, 2, "classic"), # Fernández-Val and Weidner (2016, 2018) 
-        (ProbitLink, Binomial, 2, "classic"), # Fernández-Val and Weidner (2016, 2018)
-        (LogitLink, Binomial, 2, "network"), # Hinz, Stammann and Wanner (2020) & Fernández-Val and Weidner (2016)
-        (ProbitLink, Binomial, 2, "network"), # Hinz, Stammann and Wanner (2020) & Fernández-Val and Weidner (2016)
-        (LogitLink, Binomial, 3, "network"), # Hinz, Stammann and Wanner (2020)
-        (ProbitLink, Binomial, 3, "network"), # Hinz, Stammann and Wanner (2020)
-        (LogLink, Poisson, 2, "network"), # Weidner and Zylkin (2021), JIE
-        (LogLink, Poisson, 3, "network") # Weidner and Zylkin (2021), JIE
+        (LogitLink, Binomial, 2, :classic), # Fernández-Val and Weidner (2016, 2018) 
+        (ProbitLink, Binomial, 2, :classic), # Fernández-Val and Weidner (2016, 2018)
+        (LogitLink, Binomial, 2, :network), # Hinz, Stammann and Wanner (2020) & Fernández-Val and Weidner (2016)
+        (ProbitLink, Binomial, 2, :network), # Hinz, Stammann and Wanner (2020) & Fernández-Val and Weidner (2016)
+        (LogitLink, Binomial, 3, :network), # Hinz, Stammann and Wanner (2020)
+        (ProbitLink, Binomial, 3, :network), # Hinz, Stammann and Wanner (2020)
+        (LogLink, Poisson, 2, :network), # Weidner and Zylkin (2021), JIE
+        (LogLink, Poisson, 3, :network) # Weidner and Zylkin (2021), JIE
     ]
     this_model_type = (model.link,model.distribution,length(fes_in_formula),panel_structure)
     @assert model_type_checker(this_model_type, available_types) "We currently don't support this combination of the distribution, the link, num of FEs and panel_structure"
@@ -138,7 +138,7 @@ end
 ############################################################
 #           Bias Correction In Different Models            #
 ############################################################
-function biasCorr_probit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::Int64,panel_structure::String)
+function biasCorr_probit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::Int64,panel_structure::Symbol)
     link = model.link
     y = df2[model.esample[df2.old_ind],model.yname]
     residuals = model.augmentdf.residuals[df2.old_ind]
@@ -153,9 +153,9 @@ function biasCorr_probit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::I
     w = w .* μη
     z = - η .* w
 
-    if panel_structure == "classic"
+    if panel_structure == :classic
         b = classic_b_binomial(score,v,z,w,L,fes,df2)
-    elseif panel_structure == "network"
+    elseif panel_structure == :network
         b = network_b_binomial(score,v,z,w,L,fes,df2)
     end
 
@@ -185,7 +185,7 @@ function biasCorr_probit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::I
 
 end
 
-function biasCorr_logit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::Int64,panel_structure::String)
+function biasCorr_logit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::Int64,panel_structure::Symbol)
     link = model.link
     y = df2[model.esample[df2.old_ind],model.yname]
     residuals = model.augmentdf.residuals[df2.old_ind]
@@ -198,9 +198,9 @@ function biasCorr_logit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::In
     v = y .- μ
     w = μη
     z = w .* (1.0 .- 2.0 .* μ)
-    if panel_structure == "classic"
+    if panel_structure == :classic
         b = classic_b_binomial(score,v,z,w,L,fes,df2)
-    elseif panel_structure == "network"
+    elseif panel_structure == :network
         b = network_b_binomial(score,v,z,w,L,fes,df2)
     end
 
@@ -229,11 +229,11 @@ function biasCorr_logit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::In
     )
 end
 
-function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::Int64,panel_structure::String)
+function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::Int64,panel_structure::Symbol)
     if L > 0
         printstyled("bandwidth not allowed in poisson regression bias correction. Treating L as 0...",color=:yellow)
     end
-    # @assert panel_structure == "network"
+    # @assert panel_structure == :network
     link = model.link
     y = df2[model.esample[df2.old_ind],model.yname] # Do we need to subset y with model.esample? TO-DO: test with cases with esample is not all ones.
     residuals = model.augmentdf.residuals[df2.old_ind]
@@ -242,9 +242,9 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
 
     if all([fe_symb !== nothing for (fe_key,fe_symb) in fes])
         # type: it + jt + ij, Need bias correction
-        i_levels = levels(df2[model.esample[df2.old_ind],fes["ij"][1]])
-        j_levels = levels(df2[model.esample[df2.old_ind],fes["ij"][2]])
-        t_levels = levels(df2[model.esample[df2.old_ind],fes["it"][2]])
+        i_levels = levels(df2[model.esample[df2.old_ind],fes[:ij][1]])
+        j_levels = levels(df2[model.esample[df2.old_ind],fes[:ij][2]])
+        t_levels = levels(df2[model.esample[df2.old_ind],fes[:it][2]])
         I = length(i_levels)
         J = length(j_levels)
         # @assert I==J "number of exporters is different from number of importers"
@@ -253,7 +253,7 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         # assume balanced panel
         y_sum_by_ij = zeros(size(y))
         λ_sum_by_ij = zeros(size(λ))
-        for groupSeg in getGroupSeg(df2[model.esample[df2.old_ind],fes["ij"][1]], df2[model.esample[df2.old_ind],fes["ij"][2]])
+        for groupSeg in getGroupSeg(df2[model.esample[df2.old_ind],fes[:ij][1]], df2[model.esample[df2.old_ind],fes[:ij][2]])
             y_sum_by_ij[groupSeg] .= sum(y[groupSeg])
             λ_sum_by_ij[groupSeg] .= sum(λ[groupSeg])
         end
@@ -340,7 +340,7 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
 
         N = I = J
         B̂ = zeros(K)
-        Ŵ = zeros(K,K)
+        ##newW## Ŵ = zeros(K,K)
         for k ∈ 1:K
             for i ∈ 1:I
                 # Construct: H̄_pseudo_inv
@@ -354,11 +354,11 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
                 SS_fix_i = zeros(T,T)
                 for j ∈ 1:J
                     #if i != j # uncomment to not include terms where i==j
-                    H̄_sum_along_j_fix_i += H̄[i,j,:,:]
-                    Hx̃S_fix_i += H[i,j,:,:] * Xdemean_ijtk[i,j,:,k] * S_ijt[i,j,:]'
-                    Gx̃_fix_i += G_ij_times_x_ijk(G[i,j,:,:,:], Xdemean_ijtk[i,j,:,k])
-                    SS_fix_i += S_ijt[i,j,:] * S_ijt[i,j,:]'
-                    Ŵ += Xdemean_ijtk[i,j,:,:]' * H̄[i,j,:,:] * Xdemean_ijtk[i,j,:,:]
+                        H̄_sum_along_j_fix_i += H̄[i,j,:,:]
+                        Hx̃S_fix_i += H[i,j,:,:] * Xdemean_ijtk[i,j,:,k] * S_ijt[i,j,:]'
+                        Gx̃_fix_i += G_ij_times_x_ijk(G[i,j,:,:,:], Xdemean_ijtk[i,j,:,k])
+                        SS_fix_i += S_ijt[i,j,:] * S_ijt[i,j,:]'
+                        ##newW## Ŵ += Xdemean_ijtk[i,j,:,:]' * H̄[i,j,:,:] * Xdemean_ijtk[i,j,:,:]
                     #end
                 end
                 H̄_pseudo_inv = pinv(H̄_sum_along_j_fix_i)
@@ -368,7 +368,7 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
             end
         end
         B̂ = B̂ ./ (N - 1)
-        Ŵ = Ŵ ./ (N*(N-1))
+        ##newW## Ŵ = Ŵ ./ (N*(N-1))
         D̂ = zeros(K)
         for k ∈ 1:K
             for j ∈ 1:J
@@ -382,10 +382,10 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
                 SS_fix_j = zeros(T,T)
                 for i ∈ 1:I
                     #if i != j # uncomment to not include terms where i==j
-                    H̄_sum_along_i_fix_j += H̄[i,j,:,:]
-                    Hx̃S_fix_j += H[i,j,:,:] * Xdemean_ijtk[i,j,:,k] * S_ijt[i,j,:]'
-                    Gx̃_fix_j += G_ij_times_x_ijk(G[i,j,:,:,:], Xdemean_ijtk[i,j,:,k])
-                    SS_fix_j += S_ijt[i,j,:] * S_ijt[i,j,:]'
+                        H̄_sum_along_i_fix_j += H̄[i,j,:,:]
+                        Hx̃S_fix_j += H[i,j,:,:] * Xdemean_ijtk[i,j,:,k] * S_ijt[i,j,:]'
+                        Gx̃_fix_j += G_ij_times_x_ijk(G[i,j,:,:,:], Xdemean_ijtk[i,j,:,k])
+                        SS_fix_j += S_ijt[i,j,:] * S_ijt[i,j,:]'
                     #end
                 end
                 H̄_pseudo_inv = pinv(H̄_sum_along_i_fix_j)
@@ -395,10 +395,12 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
             end
         end
         D̂ = D̂ ./ (N - 1)
+        Ŵ = model.hessian./(N*(N-1)) # This returns the same result with PPML_FE_BIAS but is not what is written in the paper
         β = model.coef - Ŵ \ (B̂ + D̂) ./ (N-1)
         ####### This function replicates the result from PPML_FE_BIAS.ado, but I also found something confusing when comparing the code with the paper
-        #### . (Section A.2.1 Analytical Bias Correction Formula) PPML_FE_BIAS.ado also add terms where i == j when constructing B̂ and D̂ (I add this in our code too to produce the exact same result)
-        #### . signs of some elements of G are different in the code and in the paper?? (might be their typo in the paper)
+        #### 1. (Section A.2.1 Analytical Bias Correction Formula) PPML_FE_BIAS.ado also add terms where i == j when constructing B̂ and D̂ (I add this in our code too to produce the exact same result)
+        #### 2. signs of some elements of G are different in the code and in the paper?? (might be their typo in the paper)
+        #### 3. the construction of Ŵ
     else
         # no need to correct β
         β = model.coef
@@ -499,7 +501,7 @@ function model_type_checker(x::Tuple,avail_list::Array{T} where T <: Any)
     # x[1] is the model's link
     # x[2] is the model's distribution
     # x[3] is the ttl number of FEs
-    # x[4] is the panel_structure that takes ["classic", "network"]
+    # x[4] is the panel_structure that takes [:classic,:network]
     for avail_type in avail_list
         if x[1] isa avail_type[1] && x[2] isa avail_type[2] && x[3] == avail_type[3] && x[4] == avail_type[4]
             return true
@@ -508,14 +510,14 @@ function model_type_checker(x::Tuple,avail_list::Array{T} where T <: Any)
     return false
 end
     
-function parse_formula_get_FEs(model,panel_structure::Any,df::DataFrame)
+function parse_formula_get_FEs(model,panel_structure::Symbol,df::DataFrame)
     # This function returns the set of FE symbols according to the formula
     # If the panel_structure is network, it returns the interaction terms only
     # If the panel_structure is classic, it checks to see if there is interaction term in the formula. If true, it throws error. It returns all the fe symbols otherwise
     vars = StatsModels.termvars(model.formula) # all the vars excluding interactions
     vars_name_to_be_set_diff = Symbol.("fe_",vars) # all the vars symbols excluding interactions (add "fe_" in the front)
-    fes, ids, formula = parse_fixedeffect(df, model.formula) # id: include fe_i, fe_j, fe_t, and possible interactions if panel_structure = "network"
-    if panel_structure == "network"
+    fes, ids, formula = parse_fixedeffect(df, model.formula) # id: include fe_i, fe_j, fe_t, and possible interactions if panel_structure = :network
+    if panel_structure == :network
         network_fes = setdiff(ids,vars_name_to_be_set_diff)
         if length(network_fes) != 0
             no_interaction_fe = setdiff(ids,network_fes)
@@ -523,7 +525,7 @@ function parse_formula_get_FEs(model,panel_structure::Any,df::DataFrame)
         else
             throw("no network fe is found")
         end
-    elseif panel_structure == "classic"
+    elseif panel_structure == :classic
         classic_fes = intersect(ids,vars_name_to_be_set_diff)
         if issetequal(classic_fes, ids)
             return ids, Symbol.(s[4:end] for s in String.(ids))
@@ -536,7 +538,7 @@ end
 function classic_b_binomial(score::Array{Float64,2},v::Array{Float64,1},z::Array{Float64,1},w::Array{Float64,1},L::Int64,fes::Dict,df::DataFrame)
     P = size(score)[2]
     b = zeros(P)
-    if fes["t"] === nothing
+    if fes[:t] === nothing
         pseudo_panel = true
         if L > 0
             printstyled("bandwidth not allowed in classic ij-pseudo panel. Treating L as 0...")
@@ -546,7 +548,7 @@ function classic_b_binomial(score::Array{Float64,2},v::Array{Float64,1},z::Array
         if fe_symb !== nothing
             b += groupSums(score ./ v .* z, w, getGroupSeg(df[!,fe_symb])) ./ 2.0
         end
-        if fe_key != "t" && L > 0 && !pseudo_panel
+        if fe_key != :t && L > 0 && !pseudo_panel
             b += groupSumsSpectral(score ./ v .* w, v, w, L,getGroupSeg(df[!,fe_key]))
         end
     end
@@ -561,8 +563,8 @@ function network_b_binomial(score::Array{Float64,2},v::Array{Float64,1},z::Array
             b += groupSums(score ./ v .* z, w, getGroupSeg(df[!,fe_symb[1]], df[!,fe_symb[2]])) ./ 2.0
         end
     end
-    if L > 0 && fes["ij"] !== nothing
-        b += groupSumsSpectral(score ./ v .* w, v, w, L,getGroupSeg(df[!,fes["ij"][1]], df[!,fes["ij"][2]]))
+    if L > 0 && fes[:ij] !== nothing
+        b += groupSumsSpectral(score ./ v .* w, v, w, L,getGroupSeg(df[!,fes[:ij][1]], df[!,fes[:ij][2]]))
     end
     return b
 end
