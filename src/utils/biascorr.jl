@@ -130,7 +130,7 @@ function bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{S
     elseif typeof(model.link) <: GLM.ProbitLink && typeof(model.distribution) <: Binomial
         return biasCorr_probit(model,df2,fe_dict,L,panel_structure)
     elseif typeof(model.link) <: GLM.LogLink && typeof(model.distribution) <: Poisson
-        return biasCorr_poisson(model,df2,fe_dict,L,panel_structure)
+        return biasCorr2_poisson(model,df2,fe_dict,L,panel_structure)
     end
 end
 
@@ -241,6 +241,8 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
     λ = GLM.linkinv.(Ref(link),η)
 
     if all([fe_symb !== nothing for (fe_key,fe_symb) in fes])
+        # print("pre-demeaning")
+        # @time begin
         # type: it + jt + ij, Need bias correction
         i_levels = levels(df2[model.esample[df2.old_ind],fes[:ij][1]])
         j_levels = levels(df2[model.esample[df2.old_ind],fes[:ij][2]])
@@ -253,7 +255,7 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         # assume balanced panel
         y_sum_by_ij = zeros(size(y))
         λ_sum_by_ij = zeros(size(λ))
-        for groupSeg in getGroupSeg(df2[model.esample[df2.old_ind],fes[:ij][1]], df2[model.esample[df2.old_ind],fes[:ij][2]])
+        @time for groupSeg in get_group_seg(df2[model.esample[df2.old_ind],fes[:ij][1]], df2[model.esample[df2.old_ind],fes[:ij][2]])
             y_sum_by_ij[groupSeg] .= sum(y[groupSeg])
             λ_sum_by_ij[groupSeg] .= sum(λ[groupSeg])
         end
@@ -264,51 +266,8 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         # Construct S
         S = y - ϑ .* y_sum_by_ij
         S_ijt = reshape(S,(I,J,T))
-        # Construct H and H̄
-        H = Array{Float64,4}(undef,(I,J,T,T));
-        H̄ = Array{Float64,4}(undef,(I,J,T,T));
-        for i in i_levels
-            for j in j_levels
-                for t in t_levels
-                    for s in t_levels
-                        H[i,j,t,s] = -ϑ_ijt[i,j,t] * ϑ_ijt[i,j,s] * y_sum_ij[i,j]
-                        H̄[i,j,t,s] = -ϑ_ijt[i,j,t] * ϑ_ijt[i,j,s] * λ_sum_ij[i,j]
-                        if t == s
-                            H[i,j,t,s] += ϑ_ijt[i,j,t] * y_sum_ij[i,j]
-                            H̄[i,j,t,s] += ϑ_ijt[i,j,t] * λ_sum_ij[i,j]
-                        end
-                    end
-                end
-            end
-        end
         # println(H)
         # Construct G
-        G = zeros(I,J,T,T,T);
-        for i in i_levels
-            for j in j_levels
-                for t in t_levels
-                    for s in t_levels
-                        for r in t_levels
-                            if t==s && t==r
-                                G[i,j,t,s,r] = - ϑ_ijt[i,j,t] * (1 - ϑ_ijt[i,j,t]) * (1 - 2*ϑ_ijt[i,j,t]) * y_sum_ij[i,j]
-                            end
-                            if s==r && r!=t
-                                G[i,j,t,s,r] =  ϑ_ijt[i,j,s] * (1 - 2*ϑ_ijt[i,j,s]) * ϑ_ijt[i,j,t] * y_sum_ij[i,j] ## Wrong sign?
-                            end
-                            if t==s && s!=r
-                                G[i,j,t,s,r] =  ϑ_ijt[i,j,s] * (1 - 2*ϑ_ijt[i,j,s]) * ϑ_ijt[i,j,r] * y_sum_ij[i,j] ## Wrong sign?
-                            end
-                            if r==t && t!=s 
-                                G[i,j,t,s,r] =  ϑ_ijt[i,j,t] * (1 - 2*ϑ_ijt[i,j,t]) * ϑ_ijt[i,j,s] * y_sum_ij[i,j] ## Wrong sign?
-                            end
-                            if r!=s && s!=t && t!=r
-                                G[i,j,t,s,r] = - 2 * ϑ_ijt[i,j,r] * ϑ_ijt[i,j,s] * ϑ_ijt[i,j,t] * y_sum_ij[i,j]
-                            end
-                        end
-                    end
-                end
-            end
-        end
         # Construct x̃ (demeaned x)
         # See footnote 33 of Weidner and Zylkin (2020)
         X = df2[model.esample[df2.old_ind], model.coefnames] |> Array{Float64,2}
@@ -326,74 +285,16 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         end
         K = size(Xdemean,2)
         Xdemean_ijtk = reshape(Xdemean,(I,J,T,K))
-
+        
         # Construct B̂, D̂, and Ŵ
-        function G_ij_times_x_ijk(G_ij::Array{Float64,3},x_ijk::Array{Float64,1})
-            T = length(x_ijk)
-            @assert size(G_ij) == (T,T,T)
-            result = zeros(T,T)
-            for r in 1:T
-                result += G_ij[r,:,:] * x_ijk[r]
-            end
-            return result
-        end
-
         N = I = J
         B̂ = zeros(K)
         ##newW## Ŵ = zeros(K,K)
-        for k ∈ 1:K
-            for i ∈ 1:I
-                # Construct: H̄_pseudo_inv
-                #            Hx̃S'
-                #            Gx̃
-                #            SS'
-                #            x̃Hx̃
-                H̄_sum_along_j_fix_i = zeros(T,T)
-                Hx̃S_fix_i = zeros(T,T)
-                Gx̃_fix_i = zeros(T,T)
-                SS_fix_i = zeros(T,T)
-                for j ∈ 1:J
-                    #if i != j # uncomment to not include terms where i==j
-                        H̄_sum_along_j_fix_i += H̄[i,j,:,:]
-                        Hx̃S_fix_i += H[i,j,:,:] * Xdemean_ijtk[i,j,:,k] * S_ijt[i,j,:]'
-                        Gx̃_fix_i += G_ij_times_x_ijk(G[i,j,:,:,:], Xdemean_ijtk[i,j,:,k])
-                        SS_fix_i += S_ijt[i,j,:] * S_ijt[i,j,:]'
-                        ##newW## Ŵ += Xdemean_ijtk[i,j,:,:]' * H̄[i,j,:,:] * Xdemean_ijtk[i,j,:,:]
-                    #end
-                end
-                H̄_pseudo_inv = pinv(H̄_sum_along_j_fix_i)
-                term1 = - H̄_pseudo_inv * Hx̃S_fix_i
-                term2 = Gx̃_fix_i * H̄_pseudo_inv * SS_fix_i * H̄_pseudo_inv ./ 2.0
-                B̂[k] += tr(term1 + term2)
-            end
-        end
+        B!(B̂,K,I,J,T,ϑ_ijt,λ_sum_ij,y_sum_ij,Xdemean_ijtk,S_ijt)
         B̂ = B̂ ./ (N - 1)
         ##newW## Ŵ = Ŵ ./ (N*(N-1))
         D̂ = zeros(K)
-        for k ∈ 1:K
-            for j ∈ 1:J
-                # Construct: H̄_pseudo_inv
-                #            Hx̃S'
-                #            Gx̃
-                #            SS'
-                H̄_sum_along_i_fix_j = zeros(T,T)
-                Hx̃S_fix_j = zeros(T,T)
-                Gx̃_fix_j = zeros(T,T)
-                SS_fix_j = zeros(T,T)
-                for i ∈ 1:I
-                    #if i != j # uncomment to not include terms where i==j
-                        H̄_sum_along_i_fix_j += H̄[i,j,:,:]
-                        Hx̃S_fix_j += H[i,j,:,:] * Xdemean_ijtk[i,j,:,k] * S_ijt[i,j,:]'
-                        Gx̃_fix_j += G_ij_times_x_ijk(G[i,j,:,:,:], Xdemean_ijtk[i,j,:,k])
-                        SS_fix_j += S_ijt[i,j,:] * S_ijt[i,j,:]'
-                    #end
-                end
-                H̄_pseudo_inv = pinv(H̄_sum_along_i_fix_j)
-                term1 = - H̄_pseudo_inv * Hx̃S_fix_j
-                term2 = Gx̃_fix_j * H̄_pseudo_inv * SS_fix_j * H̄_pseudo_inv ./ 2.0
-                D̂[k] += tr(term1 + term2)
-            end
-        end
+        D!(D̂,K,I,J,T,ϑ_ijt,λ_sum_ij,y_sum_ij,Xdemean_ijtk,S_ijt)
         D̂ = D̂ ./ (N - 1)
         Ŵ = model.hessian./(N*(N-1)) # This returns the same result with PPML_FE_BIAS but is not what is written in the paper
         β = model.coef - Ŵ \ (B̂ + D̂) ./ (N-1)
@@ -434,7 +335,7 @@ end
 #           Internal Functions            #
 ###########################################
 
-function groupSums(M::Array{Float64,2},w::Array{Float64,1},group_seg::Array{Array{Bool,1},1})
+function group_sums(M::Array{Float64,2},w::Array{Float64,1},group_seg::Array{Array{Bool,1},1})
     P = size(M)[2] # number of regressos P
     b_temp = zeros(P)
 
@@ -450,32 +351,50 @@ function groupSums(M::Array{Float64,2},w::Array{Float64,1},group_seg::Array{Arra
     return b_temp
 end
 
-function getGroupSeg(fe::Array{T,1} where T <: Any)
-    theLevels = levels(fe)
-
-    list_of_index = Array{Array{Bool,1},1}(undef,0)
-    
-    for level in theLevels
-        push!(list_of_index,fe .== level)
+function get_group_seg(fe::Array{T,1} where T <: Any)
+    p = sortperm(fe)
+    q = fe[p]
+    res = Vector{Vector{Int64}}()
+    grp = Vector{Int64}()
+    is_first = true
+    last = fe[end]
+    for (i,v) in enumerate(q)
+        if !is_first && last != v
+            push!(res,grp)
+            grp = [p[i]]
+        else
+            push!(grp, p[i])
+        end
+        last = v
+        is_first = false
     end
-
-    return list_of_index 
+    push!(res,grp)
+    return res
 end
 
-function getGroupSeg(fe1::Array{T,1} where T <: Any,fe2::Array{T,1} where T <: Any)
-    fe = zip(fe1,fe2)
-    theLevels = levels(fe)
-
-    list_of_index = Array{Array{Bool,1},1}(undef,0)
-    
-    for level in theLevels
-        push!(list_of_index,fe .== [level])
+function get_group_seg(fe1::Array{T,1},fe2::Array{T,1}) where T <: Any
+    fe = collect(zip(fe1,fe2))
+    p = sortperm(fe)
+    q = fe[p]
+    res = Vector{Vector{Int64}}()
+    grp = Vector{Int64}()
+    is_first = true
+    last = q[1]
+    for (i,v) in enumerate(q)
+        if !is_first && last != v
+            push!(res,grp)
+            grp = [p[i]]
+        else
+            push!(grp, p[i])
+        end
+        last = v
+        is_first = false
     end
-    # if sparse matrix is allowed, make it sparse compatible
-    return list_of_index 
+    push!(res,grp)
+    return res 
 end
 
-function groupSumsSpectral(M::Array{Float64,2}, v::Array{Float64,1}, w::Array{Float64,1}, L::Int64, group_seg::Array{Array{Bool,1},1})
+function group_sums_spectral(M::Array{Float64,2}, v::Array{Float64,1}, w::Array{Float64,1}, L::Int64, group_seg::Array{Array{Bool,1},1})
     # TO-DO: Need to make sure the slice M[seg_index,p], v[seg_index] are sorted from early to late observations
     P = size(M)[2] # number of regressos P
     b_temp = zeros(P)
@@ -546,10 +465,10 @@ function classic_b_binomial(score::Array{Float64,2},v::Array{Float64,1},z::Array
     end
     for (fe_key,fe_symb) in fes
         if fe_symb !== nothing
-            b += groupSums(score ./ v .* z, w, getGroupSeg(df[!,fe_symb])) ./ 2.0
+            b += group_sums(score ./ v .* z, w, get_group_seg(df[!,fe_symb])) ./ 2.0
         end
         if fe_key != :t && L > 0 && !pseudo_panel
-            b += groupSumsSpectral(score ./ v .* w, v, w, L,getGroupSeg(df[!,fe_key]))
+            b += group_sums_spectral(score ./ v .* w, v, w, L,get_group_seg(df[!,fe_key]))
         end
     end
     return b
@@ -560,11 +479,106 @@ function network_b_binomial(score::Array{Float64,2},v::Array{Float64,1},z::Array
     b = zeros(P)
     for (fe_key,fe_symb) in fes
         if fe_symb !== nothing
-            b += groupSums(score ./ v .* z, w, getGroupSeg(df[!,fe_symb[1]], df[!,fe_symb[2]])) ./ 2.0
+            b += group_sums(score ./ v .* z, w, get_group_seg(df[!,fe_symb[1]], df[!,fe_symb[2]])) ./ 2.0
         end
     end
     if L > 0 && fes[:ij] !== nothing
-        b += groupSumsSpectral(score ./ v .* w, v, w, L,getGroupSeg(df[!,fes[:ij][1]], df[!,fes[:ij][2]]))
+        b += group_sums_spectral(score ./ v .* w, v, w, L,get_group_seg(df[!,fes[:ij][1]], df[!,fes[:ij][2]]))
     end
     return b
+end
+
+function G_ijtsr(i,j,t,s,r,ϑ_ijt,y_sum_ij)
+    if r!=s && s!=t && t!=r
+        return - 2 * ϑ_ijt[i,j,r] * ϑ_ijt[i,j,s] * ϑ_ijt[i,j,t] * y_sum_ij[i,j]
+    end
+    if r==t && t!=s 
+        return ϑ_ijt[i,j,t] * (1 - 2*ϑ_ijt[i,j,t]) * ϑ_ijt[i,j,s] * y_sum_ij[i,j]
+    end
+    if t==s && s!=r
+        return ϑ_ijt[i,j,s] * (1 - 2*ϑ_ijt[i,j,s]) * ϑ_ijt[i,j,r] * y_sum_ij[i,j]
+    end
+    if s==r && r!=t
+        return ϑ_ijt[i,j,s] * (1 - 2*ϑ_ijt[i,j,s]) * ϑ_ijt[i,j,t] * y_sum_ij[i,j]
+    end
+    if t==s && t==r
+        return - ϑ_ijt[i,j,t] * (1 - ϑ_ijt[i,j,t]) * (1 - 2*ϑ_ijt[i,j,t]) * y_sum_ij[i,j]
+    end
+end
+function H_ij(i,j,ϑ_ijt,y_sum_ij)
+    # H[i,j,:,:]
+    return (- ϑ_ijt[i,j,:] * ϑ_ijt[i,j,:]' + Diagonal(ϑ_ijt[i,j,:])) .* y_sum_ij[i,j] 
+end
+function H̄_ij(i,j,ϑ_ijt,λ_sum_ij)
+    # H̄[i,j,:,:]
+    return (- ϑ_ijt[i,j,:] * ϑ_ijt[i,j,:]' + Diagonal(ϑ_ijt[i,j,:])) .* λ_sum_ij[i,j] 
+end
+
+function G_ij_times_x_ijk(i,j,k,Xdemean_ijtk,T,ϑ_ijt,y_sum_ij)
+    # [Gij * xij,k]_st
+    result = zeros(T,T)
+    for s ∈ 1:T
+        for t ∈ 1:T
+            for r ∈ 1:T
+                result[s,t] += G_ijtsr(i,j,r,s,t,ϑ_ijt,y_sum_ij) * Xdemean_ijtk[i,j,r,k]
+            end
+        end
+    end
+    return result
+end
+
+function B!(B̂,K,I,J,T,ϑ_ijt,λ_sum_ij,y_sum_ij,Xdemean_ijtk,S_ijt)
+    for k ∈ 1:K
+        for i ∈ 1:I
+            # Construct: H̄_pseudo_inv
+            #            Hx̃S'
+            #            Gx̃
+            #            SS'
+            #            x̃Hx̃
+            H̄_sum_along_j_fix_i = zeros(T,T)
+            Hx̃S_fix_i = zeros(T,T)
+            Gx̃_fix_i = zeros(T,T)
+            SS_fix_i = zeros(T,T)
+            @turbo for j ∈ 1:J
+                #if i != j # uncomment to not include terms where i==j
+                    H̄_sum_along_j_fix_i += H̄_ij(i,j,ϑ_ijt,λ_sum_ij)
+                    Hx̃S_fix_i += H_ij(i,j,ϑ_ijt,y_sum_ij) * Xdemean_ijtk[i,j,:,k] * transpose(S_ijt[i,j,:])
+                    Gx̃_fix_i += G_ij_times_x_ijk(i,j,k,Xdemean_ijtk,T,ϑ_ijt,y_sum_ij)
+                    SS_fix_i += S_ijt[i,j,:] * transpose(S_ijt[i,j,:])
+                    ##newW## Ŵ += Xdemean_ijtk[i,j,:,:]' * H̄[i,j,:,:] * Xdemean_ijtk[i,j,:,:]
+                #end
+            end
+            H̄_pseudo_inv = pinv(H̄_sum_along_j_fix_i)
+            term1 = - H̄_pseudo_inv * Hx̃S_fix_i
+            term2 = Gx̃_fix_i * H̄_pseudo_inv * SS_fix_i * H̄_pseudo_inv ./ 2.0
+            B̂[k] += tr(term1 + term2)
+        end
+    end
+end
+
+function D!(D̂,K,I,J,T,ϑ_ijt,λ_sum_ij,y_sum_ij,Xdemean_ijtk,S_ijt)
+    for k ∈ 1:K
+        for j ∈ 1:J
+            # Construct: H̄_pseudo_inv
+            #            Hx̃S'
+            #            Gx̃
+            #            SS'
+            H̄_sum_along_i_fix_j = zeros(T,T)
+            Hx̃S_fix_j = zeros(T,T)
+            Gx̃_fix_j = zeros(T,T)
+            SS_fix_j = zeros(T,T)
+            @turbo for i ∈ 1:I
+                #if i != j # uncomment to not include terms where i==j
+                    H̄_sum_along_i_fix_j += H̄_ij(i,j,ϑ_ijt,λ_sum_ij)
+                    Hx̃S_fix_j += H_ij(i,j,ϑ_ijt,y_sum_ij) * Xdemean_ijtk[i,j,:,k] * transpose(S_ijt[i,j,:])
+                    Gx̃_fix_j += G_ij_times_x_ijk(i,j,k,Xdemean_ijtk,T,ϑ_ijt,y_sum_ij)
+                    SS_fix_j += S_ijt[i,j,:] * transpose(S_ijt[i,j,:])
+                #end
+            end
+            H̄_pseudo_inv = pinv(H̄_sum_along_i_fix_j)
+            term1 = - H̄_pseudo_inv * Hx̃S_fix_j
+            term2 = Gx̃_fix_j * H̄_pseudo_inv * SS_fix_j * H̄_pseudo_inv ./ 2.0
+            D̂[k] += tr(term1 + term2)
+        end
+    end
 end
