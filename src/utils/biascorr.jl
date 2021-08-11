@@ -130,7 +130,7 @@ function bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{S
     elseif typeof(model.link) <: GLM.ProbitLink && typeof(model.distribution) <: Binomial
         return biasCorr_probit(model,df2,fe_dict,L,panel_structure)
     elseif typeof(model.link) <: GLM.LogLink && typeof(model.distribution) <: Poisson
-        return biasCorr2_poisson(model,df2,fe_dict,L,panel_structure)
+        return biasCorr_poisson(model,df2,fe_dict,L,panel_structure)
     end
 end
 
@@ -335,7 +335,7 @@ end
 #           Internal Functions            #
 ###########################################
 
-function group_sums(M::Array{Float64,2},w::Array{Float64,1},group_seg::Array{Array{Bool,1},1})
+function group_sums(M::Array{Float64,2},w::Array{Float64,1},group_seg::Vector{Vector{Int64}})
     P = size(M)[2] # number of regressos P
     b_temp = zeros(P)
 
@@ -394,13 +394,13 @@ function get_group_seg(fe1::Array{T,1},fe2::Array{T,1}) where T <: Any
     return res 
 end
 
-function group_sums_spectral(M::Array{Float64,2}, v::Array{Float64,1}, w::Array{Float64,1}, L::Int64, group_seg::Array{Array{Bool,1},1})
+function group_sums_spectral(M::Array{Float64,2}, v::Array{Float64,1}, w::Array{Float64,1}, L::Int64, group_seg::Vector{Vector{Int64}})
     # TO-DO: Need to make sure the slice M[seg_index,p], v[seg_index] are sorted from early to late observations
     P = size(M)[2] # number of regressos P
     b_temp = zeros(P)
 
     for seg_index in group_seg
-        T = sum(seg_index)
+        T = length(seg_index)
         numerator = zeros(P)
         for p in 1:P
             for l in 1:L
