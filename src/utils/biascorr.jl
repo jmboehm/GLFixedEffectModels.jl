@@ -255,7 +255,7 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         # assume balanced panel
         y_sum_by_ij = zeros(size(y))
         λ_sum_by_ij = zeros(size(λ))
-        @time for groupSeg in get_group_seg(df2[model.esample[df2.old_ind],fes[:ij][1]], df2[model.esample[df2.old_ind],fes[:ij][2]])
+        for groupSeg in get_group_seg(df2[model.esample[df2.old_ind],fes[:ij][1]], df2[model.esample[df2.old_ind],fes[:ij][2]])
             y_sum_by_ij[groupSeg] .= sum(y[groupSeg])
             λ_sum_by_ij[groupSeg] .= sum(λ[groupSeg])
         end
