@@ -81,7 +81,7 @@ x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), GLFixedEffectModel
 
 # Save fe
 m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), start = [0.2] , save = :fe )
+x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), start = [0.2] , save = [:fe] )
 fes = Float64[]
 for c in levels(df.SpeciesDummy)
     push!(fes, x.augmentdf[df.SpeciesDummy .== c, :fe_SpeciesDummy][1])
