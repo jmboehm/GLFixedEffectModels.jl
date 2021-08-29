@@ -3,6 +3,7 @@ using GLFixedEffectModels
 using Distributions, CategoricalArrays
 using RDatasets, Test, Random
 using StableRNGs
+using GLM
 
 # using Alpaca
 
@@ -35,7 +36,7 @@ df.RandomCategorical = df.Random
 # PROBIT ------------------------------------------------------------------
 # One FE, Probit
 m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), ProbitLink(), start = [0.2])
+x = GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.ProbitLink(), start = [0.2])
 @test x.coef ≈ [4.7793003788996895] atol = 1e-4
 
 # Two FE, Probit
@@ -134,3 +135,23 @@ x = GLFixedEffectModels.nlreg(df, m, Poisson(), LogLink() , start = [0.2;0.2] )
 #     fe =:(id1 + id2)
 #     )
 @test coef(x) ≈ [ 2.987722385633501; 2.0056217356569155] atol = 1e-4
+
+# Separation: based on Sergio Correia's example (https://github.com/sergiocorreia/ppmlhdfe/blob/master/guides/separation_primer.md) but with logit (easier to generate)
+rng = StableRNG(1234)
+df_sep = DataFrame(y = [[0.0, 0.0, 0.0, 1.0, 1.0, 1.0];rand(rng,[0.0,1.0],500)], x1 = [[1, 1, 0, 0, 0, 0];zeros(Float64,500)], x = collect(1.0:(6.0+500.0)))
+m = GLFixedEffectModels.@formula y ~ x + GLFixedEffectModels.fe(x1)
+try
+    # this should fail
+    x = GLFixedEffectModels.nlreg(df_sep, m, Binomial(), LogitLink() , start = [0.1], separation = :none, separation_mu_lbound=1e-10, separation_mu_ubound=1.0-1e-10, verbose=true, rho_tol=1e-12 )
+catch ex
+    @test !isnothing(ex)
+end
+# with cutoff on mu, it converges
+try
+    # this should pass
+    x = GLFixedEffectModels.nlreg(df_sep, m, Binomial(), LogitLink() , start = [0.1], separation = :mu, separation_mu_lbound=1e-10, separation_mu_ubound=1.0-1e-10, verbose=true, rho_tol=1e-12 )
+    @test x.coef ≈ [-0.0005504145168443688] atol = 1e-4
+catch ex
+    @test isnothing(ex)
+end
+

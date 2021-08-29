@@ -17,6 +17,9 @@ Estimate a generalized linear model with high dimensional categorical variables
 * `rho_tol::Real` : Tolerance level for the stephalving in the maximization routine.
 * `step_tol::Real` : Tolerance level that accounts for rounding errors inside the stephalving routine
 * `center_tol::Real` : Tolerance level for the stopping condition of the centering algorithm. Default to 1e-8 if `double_precision = true`, 1e-6 otherwise.
+* `separation::Symbol = :none` : method to detect/deal with separation. Currently supported values are `:none`, `:ignore` and `:mu`. See readme for details.
+* `separation_mu_lbound::Real = -Inf` : Lower bound for the Clarkson-Jennrich separation detection heuristic.
+* `separation_mu_ubound::Real = Inf` : Upper bound for the Clarkson-Jennrich separation detection heuristic.
 
 ### Examples
 ```julia
@@ -52,6 +55,9 @@ function nlreg(@nospecialize(df),
     rho_tol::Real = 1.0e-8, # tolerance level for the stephalving in the maximization routine.
     step_tol::Real = 1.0e-8, # tolerance level that accounts for rounding errors inside the stephalving routine
     center_tol::Real = double_precision ? 1e-8 : 1e-6, # tolerance level for the stopping condition of the centering algorithm.
+    separation::Symbol = :ignore, # method to detect and/or deal with separation
+    separation_mu_lbound::Real = -Inf,
+    separation_mu_ubound::Real = Inf,
     @nospecialize(vcovformula::Union{Symbol, Expr, Nothing} = nothing),
     @nospecialize(subsetformula::Union{Symbol, Expr, Nothing} = nothing),
     verbose::Bool = false # Print output on each iteration.
@@ -230,6 +236,40 @@ function nlreg(@nospecialize(df),
 
         # Compute IWLS weights and dependent variable
         mymueta = GLM.mueta.(Ref(link),eta)
+
+        # Check for separation, if we do
+        if (separation != :ignore)
+            # use the bounds to detect 
+            min_mueta = minimum(mymueta)
+            max_mueta = maximum(mymueta)
+            min_mu = minimum(mu)
+            max_mu = maximum(mu)
+            if (min_mueta < separation_mu_lbound) | (max_mueta > separation_mu_ubound) | (min_mu < separation_mu_lbound) | (max_mu > separation_mu_ubound)
+                problematic = ((mymueta .< separation_mu_lbound) .| (mymueta .> separation_mu_ubound) .| (mu .< separation_mu_lbound) .| (mu .> separation_mu_ubound))
+                @warn "$(sum(problematic)) observation(s) exceed the lower or upper bounds. Likely reason is statistical separation."
+                # deal with it
+                if separation == :mu
+                    mymueta[mymueta .< separation_mu_lbound] .= separation_mu_lbound 
+                    mymueta[mymueta .> separation_mu_ubound] .= separation_mu_ubound
+                    mu[mu .< separation_mu_lbound] .= separation_mu_lbound 
+                    mu[mu .> separation_mu_ubound] .= separation_mu_ubound
+                end
+                # The following would remove the observations that are outside of the bounds, and restarts the estimation.
+                # Inefficient.
+                # if separation == :restart
+                #     df_new = df[setdiff(1:size(df,1),indices),:]
+                #     println("Separation detected. Restarting...")
+                #     return nlreg(df_new,formula_origin,distribution,link,vcov,
+                #         weights=nothing,subset=subset,start=beta,maxiter_center=maxiter_center, maxiter=maxiter, 
+                #         contrasts=contrasts,dof_add=dof_add,save=save,
+                #         method=method,drop_singletons=drop_singletons,double_precision=double_precision,
+                #         dev_tol=dev_tol, rho_tol=rho_tol, step_tol=step_tol, center_tol=center_tol, 
+                #         vcovformula=vcovformula,subsetformula=subsetformula,verbose=verbose)
+                # end
+            end
+
+        end
+
         wtildesq = mymueta.*mymueta ./  GLM.glmvar.(Ref(distribution),mu)
 
         nu = (y - mu) ./ mymueta
@@ -238,7 +278,7 @@ function nlreg(@nospecialize(df),
 
         # Update weights and FixedEffectSolver object
         weights = Weights(wtildesq)
-        all(isfinite, weights) || throw("Weights are not finite")
+        all(isfinite, weights) || throw("IWLS Weights are not finite. Possible reason is separation.")
         sqrtw = sqrt.(weights)
         FixedEffects.update_weights!(feM, weights)
 
@@ -312,7 +352,7 @@ function nlreg(@nospecialize(df),
             outer_iterations = i
             break
         else
-            verbose && println("Iter $i : not converged")
+            verbose && println("Iter $i : not converged. Δdev = $((devold - dev)/dev), ||Δβ|| = $(norm(beta_update))")
             verbose && println("---------------------------------")
         end
 
