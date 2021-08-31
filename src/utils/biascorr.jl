@@ -119,7 +119,7 @@ function bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{S
         (ProbitLink, Binomial, 2, :network), # Hinz, Stammann and Wanner (2020) & Fernández-Val and Weidner (2016)
         (LogitLink, Binomial, 3, :network), # Hinz, Stammann and Wanner (2020)
         (ProbitLink, Binomial, 3, :network), # Hinz, Stammann and Wanner (2020)
-        (LogLink, Poisson, 2, :network), # Weidner and Zylkin (2021), JIE
+        # (LogLink, Poisson, 2, :network), # Weidner and Zylkin (2021), JIE. (TO-DO: support two-way)
         (LogLink, Poisson, 3, :network) # Weidner and Zylkin (2021), JIE
     ]
     this_model_type = (model.link,model.distribution,length(fes_in_formula),panel_structure)
@@ -239,53 +239,58 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
     residuals = model.augmentdf.residuals[df2.old_ind]
     η = y - residuals
     λ = GLM.linkinv.(Ref(link),η)
+    @assert all([fe_key==:ij || fe_symb !== nothing for (fe_key,fe_symb) in fes]) "You need either a three-way FE model or a two-way FE model with i#j being left out"
+    
+    
+    # print("pre-demeaning")
+    # @time begin
+    # type: it + jt + ij, Need bias correction and standard error correction
+    i_levels = levels(df2[model.esample[df2.old_ind],fes[:ij][1]])
+    j_levels = levels(df2[model.esample[df2.old_ind],fes[:ij][2]])
+    t_levels = levels(df2[model.esample[df2.old_ind],fes[:it][2]])
+    I = length(i_levels)
+    J = length(j_levels)
+    # @assert I==J "number of exporters is different from number of importers"
+    T = length(t_levels)
+    
+    # assume balanced panel
+    y_sum_by_ij = zeros(size(y))
+    λ_sum_by_ij = zeros(size(λ))
+    for groupSeg in get_group_seg(df2[model.esample[df2.old_ind],fes[:ij][1]], df2[model.esample[df2.old_ind],fes[:ij][2]])
+        y_sum_by_ij[groupSeg] .= sum(y[groupSeg])
+        λ_sum_by_ij[groupSeg] .= sum(λ[groupSeg])
+    end
+    ϑ = λ ./ λ_sum_by_ij
+    y_sum_ij = reshape(y_sum_by_ij,(I,J,T))[:,:,1]
+    λ_sum_ij = reshape(λ_sum_by_ij,(I,J,T))[:,:,1]
+    ϑ_ijt = reshape(ϑ,(I,J,T))
+    # Construct S
+    S = y - ϑ .* y_sum_by_ij
+    S_ijt = reshape(S,(I,J,T))
+    # println(H)
+    # Construct G
+    # Construct x̃ (demeaned x)
+    # See footnote 33 of Weidner and Zylkin (2020)
+    X = df2[model.esample[df2.old_ind], model.coefnames] |> Array{Float64,2}
+    weights = FixedEffects.Weights(λ)
+    all(isfinite, weights) || throw("Weights are not finite")
+    fes_fixedeffectarray = Array{FixedEffect,1}()
+    for (fe_key,fe_symb) in fes
+        fe_fixedeffectobject = FixedEffect(df2[model.esample[df2.old_ind], fe_symb[1]], df2[model.esample[df2.old_ind], fe_symb[2]])
+        push!(fes_fixedeffectarray,fe_fixedeffectobject)
+    end
+    feM = AbstractFixedEffectSolver{Float64}(fes_fixedeffectarray, weights, Val{:cpu}) # CPU/GPU??? might need more attention in the future when implement GPU
+    Xdemean, b, converged = FixedEffects.solve_residuals!(X, feM)
+    if !all(converged)
+        @warn "Convergence of annihilation procedure not achieved in default iterations; try increasing maxiter_center or decreasing center_tol."
+    end
+    K = size(Xdemean,2)
+    Xdemean_ijtk = reshape(Xdemean,(I,J,T,K))
 
-    if all([fe_symb !== nothing for (fe_key,fe_symb) in fes])
-        # print("pre-demeaning")
-        # @time begin
-        # type: it + jt + ij, Need bias correction
-        i_levels = levels(df2[model.esample[df2.old_ind],fes[:ij][1]])
-        j_levels = levels(df2[model.esample[df2.old_ind],fes[:ij][2]])
-        t_levels = levels(df2[model.esample[df2.old_ind],fes[:it][2]])
-        I = length(i_levels)
-        J = length(j_levels)
-        # @assert I==J "number of exporters is different from number of importers"
-        T = length(t_levels)
-        
-        # assume balanced panel
-        y_sum_by_ij = zeros(size(y))
-        λ_sum_by_ij = zeros(size(λ))
-        for groupSeg in get_group_seg(df2[model.esample[df2.old_ind],fes[:ij][1]], df2[model.esample[df2.old_ind],fes[:ij][2]])
-            y_sum_by_ij[groupSeg] .= sum(y[groupSeg])
-            λ_sum_by_ij[groupSeg] .= sum(λ[groupSeg])
-        end
-        ϑ = λ ./ λ_sum_by_ij
-        y_sum_ij = reshape(y_sum_by_ij,(I,J,T))[:,:,1]
-        λ_sum_ij = reshape(λ_sum_by_ij,(I,J,T))[:,:,1]
-        ϑ_ijt = reshape(ϑ,(I,J,T))
-        # Construct S
-        S = y - ϑ .* y_sum_by_ij
-        S_ijt = reshape(S,(I,J,T))
-        # println(H)
-        # Construct G
-        # Construct x̃ (demeaned x)
-        # See footnote 33 of Weidner and Zylkin (2020)
-        X = df2[model.esample[df2.old_ind], model.coefnames] |> Array{Float64,2}
-        weights = FixedEffects.Weights(λ)
-        all(isfinite, weights) || throw("Weights are not finite")
-        fes_fixedeffectarray = Array{FixedEffect,1}()
-        for (fe_key,fe_symb) in fes
-            fe_fixedeffectobject = FixedEffect(df2[model.esample[df2.old_ind], fe_symb[1]], df2[model.esample[df2.old_ind], fe_symb[2]])
-            push!(fes_fixedeffectarray,fe_fixedeffectobject)
-        end
-        feM = AbstractFixedEffectSolver{Float64}(fes_fixedeffectarray, weights, Val{:cpu}) # CPU/GPU??? might need more attention in the future when implement GPU
-        Xdemean, b, converged = FixedEffects.solve_residuals!(X, feM)
-        if !all(converged)
-            @warn "Convergence of annihilation procedure not achieved in default iterations; try increasing maxiter_center or decreasing center_tol."
-        end
-        K = size(Xdemean,2)
-        Xdemean_ijtk = reshape(Xdemean,(I,J,T,K))
-        
+    if all([fe_symb !== nothing for (fe_key,fe_symb) in fes]) # it + jt + ij
+        ###############################
+        #  Point Estimate Correction  #
+        ###############################
         # Construct B̂, D̂, and Ŵ
         N = I = J
         B̂ = zeros(K)
@@ -302,14 +307,20 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         #### 1. (Section A.2.1 Analytical Bias Correction Formula) PPML_FE_BIAS.ado also add terms where i == j when constructing B̂ and D̂ (I add this in our code too to produce the exact same result)
         #### 2. signs of some elements of G are different in the code and in the paper?? (might be their typo in the paper)
         #### 3. the construction of Ŵ
-    else
-        # no need to correct β
+
+        ###############################
+        #  Standard Error Correction  #
+        ###############################
+        new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+    else # it + jt 
         β = model.coef
+        Ŵ = model.hessian./(N*(N-1))
+        new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
     end
 
     return GLFixedEffectModel(
         β,
-        model.vcov,
+        model.vcov, # new_vcov, need to be implemented
         model.vcov_type,
         model.nclusters,
         model.iterations,
@@ -581,4 +592,75 @@ function D!(D̂,K,I,J,T,ϑ_ijt,λ_sum_ij,y_sum_ij,Xdemean_ijtk,S_ijt)
             D̂[k] += tr(term1 + term2)
         end
     end
+end
+
+function Ω(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+    corrected_Ω = zeros(K,K)
+    for i in 1:I
+        for j in 1:J
+            # construct Var(S_ij|x_ij)
+            # Xdemean_ijtk[i,j,:,:] is T-by-K
+            bias1 = Xdemean_ijtk[i,j,:,:] * inv(Ŵ) * transpose(Xdemean_ijtk[i,j,:,:])
+            bias2 = d_ij_constructor(i,j,I,J,T) * inv_W_ϕ_constructor(I,J,T,ϑ_ijt,λ_sum_ij) * transpose(d_ij_constructor(i,j,I,J,T))
+            println(bias2)
+            lev_correction = LinearAlgebra.I(T) - ( H̄_ij(i,j,ϑ_ijt,λ_sum_ij) * (bias1+bias2) ) ./ (I*(J-1))
+            EŜŜ = S_ijt[i,j,:] * transpose(S_ijt[i,j,:])
+            ESS = lev_correction \ EŜŜ
+            corrected_Ω += transpose(Xdemean_ijtk[i,j,:,:]) * ESS * Xdemean_ijtk[i,j,:,:]
+        end
+    end
+    return corrected_Ω ./ (I*(J-1))
+end
+
+function inv_W_ϕ_constructor(I,J,T,ϑ_ijt,λ_sum_ij)
+    H_ij_full = Array{Array{Float64,2},2}(undef,I,J)
+    for i in 1:I
+        for j in 1:J
+            H_ij_full[i,j] = H̄_ij(i,j,ϑ_ijt,λ_sum_ij)
+        end
+    end
+    Hαα = zeros(I*T,I*T)
+    Hγγ = zeros(J*T,J*T)
+    H̄_sum_along_i_fix_j = sum(H_ij_full,dims=1)
+    H̄_sum_along_j_fix_i = sum(H_ij_full,dims=2)
+    for i in 1:I
+        Hαα[((i-1)*T+1) : i*T, ((i-1)*T+1) : i*T] = H̄_sum_along_j_fix_i[i]
+    end
+    for j in 1:J
+        Hγγ[((j-1)*T+1) : j*T, ((j-1)*T+1) : j*T] = H̄_sum_along_i_fix_j[j]
+    end
+    Hαγ = cell2full(H_ij_full)
+    Hϕϕ = [Hαα Hαγ;transpose(Hαγ) Hγγ]
+    print(Hϕϕ)
+    return inv(Hϕϕ)
+end
+
+function d_ij_constructor(i,j,I,J,T)
+    i_indicator = falses(1,I)
+    j_indicator = falses(1,J)
+    i_indicator[i] = true
+    j_indicator[j] = true
+    idenTT = LinearAlgebra.I(T)
+    return LinearAlgebra.kron(hcat(i_indicator,j_indicator),idenTT)
+end
+
+function get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+    corected_Ω = Ω(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+    inv_Ŵ = inv(Ŵ)
+    new_vcov = inv_Ŵ * corected_Ω * inv_Ŵ
+    println(corected_Ω)
+    return new_vcov ./ (I*(J-1))
+end
+
+function cell2full(cell::Matrix{Matrix{Float64}})
+    sentinel = cell[1,1]
+    I,J = size(cell)
+    T = size(sentinel)[1]
+    full = zeros(I*T,J*T)
+    for i in 1:I
+        for j in 1:J
+            full[ ((i-1)*T+1):(i*T), ((j-1)*T+1):(j*T) ] += cell[i,j]
+        end
+    end
+    return full
 end

@@ -116,5 +116,5 @@ x_afterbc = GLFixedEffectModels.bias_correction(x, data; i_symb = :i, j_symb = :
 using CSV
 df_pois = CSV.read("PPMLFEBIAS_EXAMPLE_DATA.csv",DataFrame)
 m = GLFixedEffectModels.@formula trade ~ fta + GLFixedEffectModels.fe(imp) * GLFixedEffectModels.fe(year) + GLFixedEffectModels.fe(exp) * GLFixedEffectModels.fe(year) + GLFixedEffectModels.fe(imp) * GLFixedEffectModels.fe(exp)
-x = GLFixedEffectModels.nlreg(df_pois, m, Poisson(), LogLink(), start = [0.2], save=true; rho_tol = 1e-8)
+x = GLFixedEffectModels.nlreg(df_pois, m, Poisson(), LogLink(), start = [0.2], save=true, GLFixedEffectModels.Vcov.cluster(:imp,:exp); rho_tol = 1e-8)
  =#
