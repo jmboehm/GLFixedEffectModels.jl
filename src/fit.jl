@@ -7,7 +7,7 @@ Estimate a generalized linear model with high dimensional categorical variables
 * `distribution`: A `Distribution`. See the documentation of [GLM.jl](https://juliastats.org/GLM.jl/stable/manual/#Fitting-GLM-models-1) for valid distributions.
 * `link`: A `Link` function. See the documentation of [GLM.jl](https://juliastats.org/GLM.jl/stable/manual/#Fitting-GLM-models-1) for valid link functions.
 * `CovarianceEstimator`: A method to compute the variance-covariance matrix
-* `save::Union{Bool, Symbol} = false`: Should residuals and eventual estimated fixed effects saved in a dataframe? Use `save = :residuals` to only save residuals. Use `save = :fe` to only save fixed effects.
+* `save::Vector{Symbol} = Symbol[]`: Should residuals/predictions/eta's/estimated fixed effects be saved in the dataframe `augmentdf`? Can contain any subset of `[:residuals,:eta,:mu,:fe]`.
 * `method::Symbol`: A symbol for the method. Default is :cpu. Alternatively,  :gpu requires `CuArrays`. In this case, use the option `double_precision = false` to use `Float32`.
 * `contrasts::Dict = Dict()` An optional Dict of contrast codings for each categorical variable in the `formula`.  Any unspecified variables will have `DummyCoding`.
 * `maxiter::Integer = 1000`: Maximum number of iterations
@@ -17,6 +17,9 @@ Estimate a generalized linear model with high dimensional categorical variables
 * `rho_tol::Real` : Tolerance level for the stephalving in the maximization routine.
 * `step_tol::Real` : Tolerance level that accounts for rounding errors inside the stephalving routine
 * `center_tol::Real` : Tolerance level for the stopping condition of the centering algorithm. Default to 1e-8 if `double_precision = true`, 1e-6 otherwise.
+* `separation::Symbol = :none` : method to detect/deal with separation. Currently supported values are `:none`, `:ignore` and `:mu`. See readme for details.
+* `separation_mu_lbound::Real = -Inf` : Lower bound for the Clarkson-Jennrich separation detection heuristic.
+* `separation_mu_ubound::Real = Inf` : Upper bound for the Clarkson-Jennrich separation detection heuristic.
 
 ### Examples
 ```julia
@@ -44,14 +47,17 @@ function nlreg(@nospecialize(df),
     maxiter::Integer = 1000,           # maximum number of iterations
     contrasts::Dict = Dict{Symbol, Any}(),
     dof_add::Integer = 0,
-    @nospecialize(save::Union{Bool, Symbol} = false),
+    save::Vector{Symbol} = Symbol[],
     method::Symbol = :cpu,
     drop_singletons = true,
     double_precision::Bool = true,
     dev_tol::Real = 1.0e-8, # tolerance level for the first stopping condition of the maximization routine.
-    rho_tol::Real = 1.0e-4, # tolerance level for the stephalving in the maximization routine.
+    rho_tol::Real = 1.0e-8, # tolerance level for the stephalving in the maximization routine.
     step_tol::Real = 1.0e-8, # tolerance level that accounts for rounding errors inside the stephalving routine
     center_tol::Real = double_precision ? 1e-8 : 1e-6, # tolerance level for the stopping condition of the centering algorithm.
+    separation::Symbol = :ignore, # method to detect and/or deal with separation
+    separation_mu_lbound::Real = -Inf,
+    separation_mu_ubound::Real = Inf,
     @nospecialize(vcovformula::Union{Symbol, Expr, Nothing} = nothing),
     @nospecialize(subsetformula::Union{Symbol, Expr, Nothing} = nothing),
     verbose::Bool = false # Print output on each iteration.
@@ -98,12 +104,7 @@ function nlreg(@nospecialize(df),
     ## Save keyword argument
     ##
     ##############################################################################
-    if !(save isa Bool)
-        if save ∉ (:residuals, :fe)
-            throw("the save keyword argument must be a Bool or a Symbol equal to :residuals or :fe")
-        end
-    end
-    save_residuals = (save == :residuals) | (save == true)
+    save_residuals = (:residuals ∈ save)
 
     ##############################################################################
     ##
@@ -139,7 +140,7 @@ function nlreg(@nospecialize(df),
             end
         end
     end
-    save_fe = (save == :fe) | ((save == true) & has_fes)
+    save_fe = (:fe ∈ save) & has_fes 
 
     nobs = sum(esample)
     (nobs > 0) || throw("sample is empty")
@@ -235,6 +236,40 @@ function nlreg(@nospecialize(df),
 
         # Compute IWLS weights and dependent variable
         mymueta = GLM.mueta.(Ref(link),eta)
+
+        # Check for separation, if we do
+        if (separation != :ignore)
+            # use the bounds to detect 
+            min_mueta = minimum(mymueta)
+            max_mueta = maximum(mymueta)
+            min_mu = minimum(mu)
+            max_mu = maximum(mu)
+            if (min_mueta < separation_mu_lbound) | (max_mueta > separation_mu_ubound) | (min_mu < separation_mu_lbound) | (max_mu > separation_mu_ubound)
+                problematic = ((mymueta .< separation_mu_lbound) .| (mymueta .> separation_mu_ubound) .| (mu .< separation_mu_lbound) .| (mu .> separation_mu_ubound))
+                @warn "$(sum(problematic)) observation(s) exceed the lower or upper bounds. Likely reason is statistical separation."
+                # deal with it
+                if separation == :mu
+                    mymueta[mymueta .< separation_mu_lbound] .= separation_mu_lbound 
+                    mymueta[mymueta .> separation_mu_ubound] .= separation_mu_ubound
+                    mu[mu .< separation_mu_lbound] .= separation_mu_lbound 
+                    mu[mu .> separation_mu_ubound] .= separation_mu_ubound
+                end
+                # The following would remove the observations that are outside of the bounds, and restarts the estimation.
+                # Inefficient.
+                # if separation == :restart
+                #     df_new = df[setdiff(1:size(df,1),indices),:]
+                #     println("Separation detected. Restarting...")
+                #     return nlreg(df_new,formula_origin,distribution,link,vcov,
+                #         weights=nothing,subset=subset,start=beta,maxiter_center=maxiter_center, maxiter=maxiter, 
+                #         contrasts=contrasts,dof_add=dof_add,save=save,
+                #         method=method,drop_singletons=drop_singletons,double_precision=double_precision,
+                #         dev_tol=dev_tol, rho_tol=rho_tol, step_tol=step_tol, center_tol=center_tol, 
+                #         vcovformula=vcovformula,subsetformula=subsetformula,verbose=verbose)
+                # end
+            end
+
+        end
+
         wtildesq = mymueta.*mymueta ./  GLM.glmvar.(Ref(distribution),mu)
 
         nu = (y - mu) ./ mymueta
@@ -243,7 +278,7 @@ function nlreg(@nospecialize(df),
 
         # Update weights and FixedEffectSolver object
         weights = Weights(wtildesq)
-        all(isfinite, weights) || throw("Weights are not finite")
+        all(isfinite, weights) || throw("IWLS Weights are not finite. Possible reason is separation.")
         sqrtw = sqrt.(weights)
         FixedEffects.update_weights!(feM, weights)
 
@@ -291,7 +326,7 @@ function nlreg(@nospecialize(df),
                 eta = eta + rho .* eta_update
                 beta = beta + rho .* beta_update
                 verbose && println("beta = $(beta)")
-                residuals = y - eta
+                residuals = y - mu
                 break
             end
 
@@ -317,7 +352,7 @@ function nlreg(@nospecialize(df),
             outer_iterations = i
             break
         else
-            verbose && println("Iter $i : not converged")
+            verbose && println("Iter $i : not converged. Δdev = $((devold - dev)/dev), ||Δβ|| = $(norm(beta_update))")
             verbose && println("---------------------------------")
         end
 
@@ -358,6 +393,22 @@ function nlreg(@nospecialize(df),
             else
                 augmentdf[!, ids[j]] = newfes[j]
             end
+        end
+    end
+    if :mu ∈ save 
+        if nobs < length(esample)
+            augmentdf.mu = Vector{Union{Float64, Missing}}(missing, length(esample))
+            augmentdf[esample, :mu] = mu
+        else
+            augmentdf[!, :mu] = mu
+        end
+    end
+    if :eta ∈ save 
+        if nobs < length(esample)
+            augmentdf.eta = Vector{Union{Float64, Missing}}(missing, length(esample))
+            augmentdf[esample, :eta] = eta
+        else
+            augmentdf[!, :eta] = eta
         end
     end
 

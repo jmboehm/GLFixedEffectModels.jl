@@ -61,11 +61,16 @@ StatsBase.nullloglikelihood(x::GLFixedEffectModel) = error("nullloglikelihood is
 # TODO: check whether this is equal to x.gradient
 StatsBase.score(x::GLFixedEffectModel) = error("score is not yet implemented for $(typeof(x)).")
 
+function StatsBase.predict(x::GLFixedEffectModel)
+    ("mu" ∉ names(x.augmentdf)) && error("Predicted response `mu` has not been saved. Run nlreg with :mu included in the keyword vector `save`.")
+    x.augmentdf.mu
+end
 function StatsBase.predict(x::GLFixedEffectModel, df::AbstractDataFrame)
     error("predict is not yet implemented for $(typeof(x)).")
 end
-function StatsBase.residuals(x::GLFixedEffectModel, df::AbstractDataFrame)
-    error("residuals is not yet implemented for $(typeof(x)).")
+function StatsBase.residuals(x::GLFixedEffectModel)
+    ("residuals" ∉ names(x.augmentdf)) && error("Residuals have not been saved. Run nlreg with :fe included in the keyword vector `save`.")
+    x.augmentdf.residuals
 end
 
 # predict, residuals, modelresponse
