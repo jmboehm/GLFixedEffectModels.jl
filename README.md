@@ -64,6 +64,9 @@ The optional arguments are:
 * `rho_tol::Real` : Tolerance level for the stephalving in the maximization routine.
 * `step_tol::Real` : Tolerance level that accounts for rounding errors inside the stephalving routine
 * `center_tol::Real` : Tolerance level for the stopping condition of the centering algorithm. Default to 1e-8 if `double_precision = true`, 1e-6 otherwise.
+* `separation::Symbol = :ignore` : Method to detect/deal with [separation](https://github.com/sergiocorreia/ppmlhdfe/blob/master/guides/separation_primer.md). Currently supported values are `:none`, `:ignore` and `:mu`. `:none` checks for observations that are outside `[separation_mu_lbound,separation_mu_ubound]`, and gives a warning, but does not do anything. `:ignore` does not check (and may therefore be slightly faster than the other options). `:mu` truncates mu at `separation_mu_lbound` or `separation_mu_ubound`. 
+* `separation_mu_lbound::Real = -Inf` : Lower bound for the separation detection/correction heuristic (on mu). What a reasonable value would be depends on the model that you're trying to fit.
+* `separation_mu_ubound::Real = Inf` : Upper bound for the separation detection/correction heuristic.
 
 ## Things that still need to be implemented
 
