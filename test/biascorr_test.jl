@@ -33,7 +33,7 @@ coef1 = 7.214197357443702
 =#
 
 m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy) + GLFixedEffectModels.fe(RandomCategorical)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), start = [0.2], save=true)
+x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), start = [0.2], save = [:fe,:residuals])
 x_afterbc = GLFixedEffectModels.BiasCorr(x, df)
 
 @test x_afterbc.coef ≈ [7.214197357443702] atol = 1e-4
@@ -53,7 +53,7 @@ coef2_afterbc = 4.1962783532153605
 ###############################
 =#
 
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), ProbitLink(), start = [0.2], save=true)
+x = GLFixedEffectModels.nlreg(df, m, Binomial(), ProbitLink(), start = [0.2], save = [:fe,:residuals])
 x_afterbc = GLFixedEffectModels.BiasCorr(x, df)
 @test x_afterbc.coef ≈ [4.1962783532153605] atol = 1e-4
 
@@ -83,7 +83,7 @@ coef_L3 = -0.8845864617809618
 =#
 
 m = GLFixedEffectModels.@formula y ~ x + GLFixedEffectModels.fe(i) + GLFixedEffectModels.fe(j) + GLFixedEffectModels.fe(t)
-x = GLFixedEffectModels.nlreg(data, m, Binomial(), LogitLink(), start = [0.2], save=true)
+x = GLFixedEffectModels.nlreg(data, m, Binomial(), LogitLink(), start = [0.2], save = [:fe,:residuals])
 x_bc_L0 = GLFixedEffectModels.BiasCorr(x, data; panel_structure = "network", L = 0)
 x_bc_L3 = GLFixedEffectModels.BiasCorr(x, data; panel_structure = "network", L = 3)
 @test x_bc_L0.coef ≈ [-0.8958868087842135] atol = 1e-4
