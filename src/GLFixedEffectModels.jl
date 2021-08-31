@@ -17,6 +17,7 @@ using Distributions
 using Reexport
 using GLM
 using Combinatorics
+using LoopVectorization
 
 @reexport using StatsBase
 @reexport using GLM
@@ -36,7 +37,7 @@ has_fe,
 Vcov,
 VcovData,
 responsename,
-BiasCorr
+bias_correction
 
 ##############################################################################
 ##
