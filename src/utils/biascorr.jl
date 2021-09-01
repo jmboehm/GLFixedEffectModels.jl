@@ -70,7 +70,7 @@ We only support the following models:
 - Poisson regression, Log link, Three-way, Network
 """
 function bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{Symbol,Nothing}=nothing,j_symb::Union{Symbol,Nothing}=nothing,t_symb::Union{Symbol,Nothing}=nothing,L::Int64=0,panel_structure::Symbol=:classic)
-    @assert ncol(model.augmentdf) > 1 "please save the entire augmented data frame in order to do bias correction"
+    @assert :mu in propertynames(model.augmentdf) and :eta in propertynames(model.augmentdf) "please save :eta and :mu before bias correction"
     @assert panel_structure in [:classic, :network] "you can only choose :classic or :network for panel_structure"
     @assert typeof(model.distribution) <: Union{Binomial,Poisson} "currently only support binomial regression and poisson regression"
     @assert typeof(model.link) <: Union{GLM.LogitLink,GLM.ProbitLink,GLM.LogLink} "currently only support probit and logit link (binomial regression), and log link (poisson regression)"
@@ -108,7 +108,7 @@ function bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{S
 
     ########## sort df ############ 
     df.old_ind = rownumber.(eachrow(df))
-    df2 = sort(df, [t_symb,j_symb,i_symb][[t_symb,j_symb,i_symb] .!== nothing])
+    df = sort(df, [t_symb,j_symb,i_symb][[t_symb,j_symb,i_symb] .!== nothing])
     ###############################
 
     # check if we currently support the combination of the distribution, the link, num of FEs and the panel_structure
@@ -125,12 +125,12 @@ function bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{S
     this_model_type = (model.link,model.distribution,length(fes_in_formula),panel_structure)
     @assert model_type_checker(this_model_type, available_types) "We currently don't support this combination of the distribution, the link, num of FEs and panel_structure"
 
-    if typeof(model.link) <: GLM.LogitLink && typeof(model.distribution) <: Binomial
-        return biasCorr_logit(model,df2,fe_dict,L,panel_structure)
-    elseif typeof(model.link) <: GLM.ProbitLink && typeof(model.distribution) <: Binomial
-        return biasCorr_probit(model,df2,fe_dict,L,panel_structure)
-    elseif typeof(model.link) <: GLM.LogLink && typeof(model.distribution) <: Poisson
-        return biasCorr_poisson(model,df2,fe_dict,L,panel_structure)
+    if model.link isa GLM.LogitLink && model.distribution isa Binomial
+        return biascorr_logit(model,df,fe_dict,L,panel_structure)
+    elseif model.link isa GLM.ProbitLink && model.distribution isa Binomial
+        return biascorr_probit(model,df,fe_dict,L,panel_structure)
+    elseif model.link isa GLM.LogLink && model.distribution isa Poisson
+        return biascorr_poisson(model,df,fe_dict,L,panel_structure)
     end
 end
 
@@ -138,14 +138,13 @@ end
 ############################################################
 #           Bias Correction In Different Models            #
 ############################################################
-function biasCorr_probit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::Int64,panel_structure::Symbol)
+function biascorr_probit(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::Int64,panel_structure::Symbol)
     link = model.link
-    y = df2[model.esample[df2.old_ind],model.yname]
-    residuals = model.augmentdf.residuals[df2.old_ind]
-    η = y - residuals
-    μ = GLM.linkinv.(Ref(link),η)
+    y = df[model.esample[df.old_ind],model.yname]
+    η = model.augmentdf.eta[df.old_ind]
+    μ = model.augmentdf.mu[df.old_ind]
     μη = GLM.mueta.(Ref(link),η)
-    score = model.gradient[df2.old_ind,:]
+    score = model.gradient[df.old_ind,:]
     hessian = model.hessian
     
     w = μη ./ (μ.*(1.0 .- μ))
@@ -154,9 +153,9 @@ function biasCorr_probit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::I
     z = - η .* w
 
     if panel_structure == :classic
-        b = classic_b_binomial(score,v,z,w,L,fes,df2)
+        b = classic_b_binomial(score,v,z,w,L,fes,df)
     elseif panel_structure == :network
-        b = network_b_binomial(score,v,z,w,L,fes,df2)
+        b = network_b_binomial(score,v,z,w,L,fes,df)
     end
 
     β = model.coef + hessian \ b
@@ -185,23 +184,22 @@ function biasCorr_probit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::I
 
 end
 
-function biasCorr_logit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::Int64,panel_structure::Symbol)
+function biascorr_logit(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::Int64,panel_structure::Symbol)
     link = model.link
-    y = df2[model.esample[df2.old_ind],model.yname]
-    residuals = model.augmentdf.residuals[df2.old_ind]
-    η = y - residuals
-    μ = GLM.linkinv.(Ref(link),η)
+    y = df[model.esample[df.old_ind],model.yname]
+    η = model.augmentdf.eta[df.old_ind]
+    μ = model.augmentdf.mu[df.old_ind]
     μη = GLM.mueta.(Ref(link),η)
-    score = model.gradient[df2.old_ind,:]
+    score = model.gradient[df.old_ind,:]
     hessian = model.hessian
 
     v = y .- μ
     w = μη
     z = w .* (1.0 .- 2.0 .* μ)
     if panel_structure == :classic
-        b = classic_b_binomial(score,v,z,w,L,fes,df2)
+        b = classic_b_binomial(score,v,z,w,L,fes,df)
     elseif panel_structure == :network
-        b = network_b_binomial(score,v,z,w,L,fes,df2)
+        b = network_b_binomial(score,v,z,w,L,fes,df)
     end
 
     β = model.coef + hessian \ b
@@ -229,25 +227,22 @@ function biasCorr_logit(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::In
     )
 end
 
-function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::Int64,panel_structure::Symbol)
+function biascorr_poisson(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::Int64,panel_structure::Symbol)
     if L > 0
         printstyled("bandwidth not allowed in poisson regression bias correction. Treating L as 0...",color=:yellow)
     end
     # @assert panel_structure == :network
-    link = model.link
-    y = df2[model.esample[df2.old_ind],model.yname] # Do we need to subset y with model.esample? TO-DO: test with cases with esample is not all ones.
-    residuals = model.augmentdf.residuals[df2.old_ind]
-    η = y - residuals
-    λ = GLM.linkinv.(Ref(link),η)
+    y = df[model.esample[df.old_ind],model.yname] # Do we need to subset y with model.esample? TO-DO: test with cases with esample is not all ones.
+    λ = model.augmentdf.mu[df.old_ind]
     @assert all([fe_key==:ij || fe_symb !== nothing for (fe_key,fe_symb) in fes]) "You need either a three-way FE model or a two-way FE model with i#j being left out"
     
     
     # print("pre-demeaning")
     # @time begin
     # type: it + jt + ij, Need bias correction and standard error correction
-    i_levels = levels(df2[model.esample[df2.old_ind],fes[:ij][1]])
-    j_levels = levels(df2[model.esample[df2.old_ind],fes[:ij][2]])
-    t_levels = levels(df2[model.esample[df2.old_ind],fes[:it][2]])
+    i_levels = levels(df[model.esample[df.old_ind],fes[:ij][1]])
+    j_levels = levels(df[model.esample[df.old_ind],fes[:ij][2]])
+    t_levels = levels(df[model.esample[df.old_ind],fes[:it][2]])
     I = length(i_levels)
     J = length(j_levels)
     # @assert I==J "number of exporters is different from number of importers"
@@ -256,7 +251,7 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
     # assume balanced panel
     y_sum_by_ij = zeros(size(y))
     λ_sum_by_ij = zeros(size(λ))
-    for groupSeg in get_group_seg(df2[model.esample[df2.old_ind],fes[:ij][1]], df2[model.esample[df2.old_ind],fes[:ij][2]])
+    for groupSeg in get_group_seg(df[model.esample[df.old_ind],fes[:ij][1]], df[model.esample[df.old_ind],fes[:ij][2]])
         y_sum_by_ij[groupSeg] .= sum(y[groupSeg])
         λ_sum_by_ij[groupSeg] .= sum(λ[groupSeg])
     end
@@ -271,12 +266,12 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
     # Construct G
     # Construct x̃ (demeaned x)
     # See footnote 33 of Weidner and Zylkin (2020)
-    X = df2[model.esample[df2.old_ind], model.coefnames] |> Array{Float64,2}
+    X = df[model.esample[df.old_ind], model.coefnames] |> Array{Float64,2}
     weights = FixedEffects.Weights(λ)
     all(isfinite, weights) || throw("Weights are not finite")
     fes_fixedeffectarray = Array{FixedEffect,1}()
     for (fe_key,fe_symb) in fes
-        fe_fixedeffectobject = FixedEffect(df2[model.esample[df2.old_ind], fe_symb[1]], df2[model.esample[df2.old_ind], fe_symb[2]])
+        fe_fixedeffectobject = FixedEffect(df[model.esample[df.old_ind], fe_symb[1]], df[model.esample[df.old_ind], fe_symb[2]])
         push!(fes_fixedeffectarray,fe_fixedeffectobject)
     end
     feM = AbstractFixedEffectSolver{Float64}(fes_fixedeffectarray, weights, Val{:cpu}) # CPU/GPU??? might need more attention in the future when implement GPU
@@ -311,11 +306,11 @@ function biasCorr_poisson(model::GLFixedEffectModel,df2::DataFrame,fes::Dict,L::
         ###############################
         #  Standard Error Correction  #
         ###############################
-        new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+        # new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
     else # it + jt 
         β = model.coef
         Ŵ = model.hessian./(N*(N-1))
-        new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+        # new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
     end
 
     return GLFixedEffectModel(
