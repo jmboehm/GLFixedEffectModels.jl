@@ -36,12 +36,9 @@
 #                  |    2    |  it + jt + ij            |          YES           |                      |  Weidner and Zylkin (2020)
 # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-
-using CSV
-
-############################################################
+###################################################################
 #                   Main Function bias_correction()               #
-############################################################
+###################################################################
 
 """
     bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{Symbol,Nothing}=nothing,j_symb::Union{Symbol,Nothing}=nothing,t_symb::Union{Symbol,Nothing}=nothing,L::Int64=0,panel_structure::Symbol=:classic)
