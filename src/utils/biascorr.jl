@@ -37,7 +37,7 @@
 # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
-
+using CSV
 
 ############################################################
 #                   Main Function bias_correction()               #
@@ -240,9 +240,12 @@ function biascorr_poisson(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::I
     # print("pre-demeaning")
     # @time begin
     # type: it + jt + ij, Need bias correction and standard error correction
-    i_levels = levels(df[model.esample[df.old_ind],fes[:ij][1]])
-    j_levels = levels(df[model.esample[df.old_ind],fes[:ij][2]])
-    t_levels = levels(df[model.esample[df.old_ind],fes[:it][2]])
+    i_ind = df[model.esample[df.old_ind],fes[:ij][1]]
+    j_ind = df[model.esample[df.old_ind],fes[:ij][2]]
+    t_ind = df[model.esample[df.old_ind],fes[:it][2]]
+    i_levels = levels(i_ind)
+    j_levels = levels(j_ind)
+    t_levels = levels(t_ind)
     I = length(i_levels)
     J = length(j_levels)
     # @assert I==J "number of exporters is different from number of importers"
@@ -251,7 +254,7 @@ function biascorr_poisson(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::I
     # assume balanced panel
     y_sum_by_ij = zeros(size(y))
     λ_sum_by_ij = zeros(size(λ))
-    for groupSeg in get_group_seg(df[model.esample[df.old_ind],fes[:ij][1]], df[model.esample[df.old_ind],fes[:ij][2]])
+    for groupSeg in get_group_seg(i_ind, j_ind)
         y_sum_by_ij[groupSeg] .= sum(y[groupSeg])
         λ_sum_by_ij[groupSeg] .= sum(λ[groupSeg])
     end
@@ -259,6 +262,7 @@ function biascorr_poisson(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::I
     y_sum_ij = reshape(y_sum_by_ij,(I,J,T))[:,:,1]
     λ_sum_ij = reshape(λ_sum_by_ij,(I,J,T))[:,:,1]
     ϑ_ijt = reshape(ϑ,(I,J,T))
+    λ_ijt = reshape(λ,(I,J,T))
     # Construct S
     S = y - ϑ .* y_sum_by_ij
     S_ijt = reshape(S,(I,J,T))
@@ -306,7 +310,8 @@ function biascorr_poisson(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::I
         ###############################
         #  Standard Error Correction  #
         ###############################
-        # new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+        new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,model.hessian,ϑ_ijt,λ_sum_ij,S_ijt)
+        # new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,model.hessian,ϑ_ijt,λ_sum_ij,S_ijt)
     else # it + jt 
         β = model.coef
         Ŵ = model.hessian./(N*(N-1))
@@ -315,7 +320,7 @@ function biascorr_poisson(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::I
 
     return GLFixedEffectModel(
         β,
-        model.vcov, # new_vcov, need to be implemented
+        new_vcov, # new_vcov, need to be implemented
         model.vcov_type,
         model.nclusters,
         model.iterations,
@@ -591,20 +596,21 @@ end
 
 function Ω(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
     corrected_Ω = zeros(K,K)
+    HH = inv_W_ϕ_constructor(I,J,T,ϑ_ijt,λ_sum_ij)
+    # HH = CSV.read("/Users/sunye/Downloads/GLFixedEffectModels.jl/test/W_phi_inv.csv",DataFrame,header=false)|>Matrix
     for i in 1:I
         for j in 1:J
             # construct Var(S_ij|x_ij)
             # Xdemean_ijtk[i,j,:,:] is T-by-K
             bias1 = Xdemean_ijtk[i,j,:,:] * inv(Ŵ) * transpose(Xdemean_ijtk[i,j,:,:])
-            bias2 = d_ij_constructor(i,j,I,J,T) * inv_W_ϕ_constructor(I,J,T,ϑ_ijt,λ_sum_ij) * transpose(d_ij_constructor(i,j,I,J,T))
-            println(bias2)
-            lev_correction = LinearAlgebra.I(T) - ( H̄_ij(i,j,ϑ_ijt,λ_sum_ij) * (bias1+bias2) ) ./ (I*(J-1))
+            bias2 = d_ij_constructor(i,j,I,J,T) * HH * transpose(d_ij_constructor(i,j,I,J,T))
+            lev_correction = LinearAlgebra.I(T) - ( H̄_ij(i,j,ϑ_ijt,λ_sum_ij) * (bias1+bias2) )
             EŜŜ = S_ijt[i,j,:] * transpose(S_ijt[i,j,:])
             ESS = lev_correction \ EŜŜ
             corrected_Ω += transpose(Xdemean_ijtk[i,j,:,:]) * ESS * Xdemean_ijtk[i,j,:,:]
         end
     end
-    return corrected_Ω ./ (I*(J-1))
+    return corrected_Ω ./ (I*J)
 end
 
 function inv_W_ϕ_constructor(I,J,T,ϑ_ijt,λ_sum_ij)
@@ -626,8 +632,21 @@ function inv_W_ϕ_constructor(I,J,T,ϑ_ijt,λ_sum_ij)
     end
     Hαγ = cell2full(H_ij_full)
     Hϕϕ = [Hαα Hαγ;transpose(Hαγ) Hγγ]
-    print(Hϕϕ)
-    return inv(Hϕϕ)
+    return pinv(Hϕϕ)
+end
+
+function invsym(M::Matrix{Float64},tol=1e-10)
+    @assert issymmetric(M)
+    eigen_vec, eigen_val= svd(M)
+    inv_eigen_val = similar(eigen_val)
+    for i in eachindex(inv_eigen_val)
+        if eigen_val[i] < tol
+            inv_eigen_val[i] = 0
+        else
+            inv_eigen_val[i] = 1 / eigen_val[i]
+        end
+    end
+    return eigen_vec * Diagonal(inv_eigen_val) * transpose(eigen_vec)
 end
 
 function d_ij_constructor(i,j,I,J,T)
@@ -640,11 +659,11 @@ function d_ij_constructor(i,j,I,J,T)
 end
 
 function get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
-    corected_Ω = Ω(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+    corrected_Ω = Ω(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+    display(Ŵ)
     inv_Ŵ = inv(Ŵ)
-    new_vcov = inv_Ŵ * corected_Ω * inv_Ŵ
-    println(corected_Ω)
-    return new_vcov ./ (I*(J-1))
+    new_vcov = inv_Ŵ * corrected_Ω * inv_Ŵ
+    return new_vcov .* ((I*J) * (I*J)/(I*J-1))
 end
 
 function cell2full(cell::Matrix{Matrix{Float64}})
@@ -658,4 +677,48 @@ function cell2full(cell::Matrix{Matrix{Float64}})
         end
     end
     return full
+end
+
+function get_new_vcov(I,J,T,K,ϑ_ijt,λ_ijt,λ_sum_ij,S_ijt,t_ind,Xdemean_ijtk,Ŵ)
+    # this is a direct replica of the counterpart in ppml_fe_bias
+    ϑ_jit = permutedims(ϑ_ijt, [2,1,3])
+    colshape_theta_ij_T_J_T_1_1 = reshape(repeat(ϑ_jit,inner=[T,1,1]),(T*J*I,T))
+    s_equals_t = repeat(LinearAlgebra.I(T),outer=[I*J,1]) # TJI x T
+    temp = s_equals_t - colshape_theta_ij_T_J_T_1_1
+    temp = reshape(temp,(T,J,I,T))
+    d_it_tilde = zeros(T,J,I,T,I)
+    for i in 1:I
+        d_it_tilde[:,:,i,:,i] = temp[:,:,i,:]
+    end
+    d_it_tilde = reshape(d_it_tilde,T*J*I,T*I)
+    d_jt_tilde = zeros(T,J,I,T,J)
+    for j in 1:J
+        d_jt_tilde[:,j,:,:,j] = temp[:,:,j,:]
+    end
+    d_jt_tilde = reshape(d_jt_tilde,T*J*I,T*J)
+    d_tilde = hcat(d_it_tilde,d_jt_tilde)
+    λ_flattened_tji = vec(permutedims(λ_ijt, [3,2,1]))
+    V_FE = pinv(transpose(d_tilde.*λ_flattened_tji) * d_tilde)
+    d_ijt = d_tilde .> 0
+    dVd = zeros(I*J,T*T)
+    dV = d_ijt * V_FE
+    for t in 1:T
+        dVd_column_ind = collect((0:T-t)*T) .+ collect(t:T)
+        dVd[:,dVd_column_ind] = reshape(sum(dV[t_ind .< T-t+2,:] .* d_ijt[t_ind .> t-1,:],dims=2),(I*J,T-(t-1)))
+    end
+    idx_1 = vcat([collect((t-1:T-1)*T) .+ (t-1) for t in 2:T]...)
+    idx_2 = vcat([collect((t:T)) .+ (t-2)*T for t in 2:T]...)
+    dVd[:,idx_1] = dVd[:,idx_2]
+    display(dVd)
+    # corrected_Ω = zeros(K,K)
+    # for i in 1:I
+    #     for j in 1:J
+    #        xVx_per_iter = Xdemean_ijtk[i,j,:,:] * inv(Ŵ) * transpose(Xdemean_ijtk[i,j,:,:])
+    #        dVd_per_iter = dVd[j,i,:,:]
+    #        lev_correction = LinearAlgebra.I(T) - ( H̄_ij(i,j,ϑ_ijt,λ_sum_ij) * (xVx_per_iter+dVd_per_iter) ) ./ (I*(J-1))
+    #        EŜŜ = S_ijt[i,j,:] * transpose(S_ijt[i,j,:])
+    #        ESS = lev_correction \ EŜŜ
+    #        corrected_Ω += transpose(Xdemean_ijtk[i,j,:,:]) * ESS * Xdemean_ijtk[i,j,:,:]
+    #    end
+    #end
 end
