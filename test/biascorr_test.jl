@@ -1,4 +1,3 @@
-# include("../src/GLFixedEffectModels.jl")
 using GLFixedEffectModels
 using Distributions, CategoricalArrays
 using RDatasets, Test, Random
@@ -103,16 +102,24 @@ t_index = repeat(1:T,outer = I*J)
 
 # Reset rng
 rng = StableRNG(1234)
-data = DataFrame(i = i_index, j = j_index, t = t_index, x = rand(rng, I*J*T), y = rand(rng, Poisson(), I*J*T).+1)
+data = DataFrame(i = i_index, j = j_index, t = t_index, x1 = rand(rng, I*J*T), x2= rand(rng,I*J*T))
+data.y = exp.(data.x1 + data.x2) .* rand(rng, Poisson(), I*J*T)
 # data = sort(data, [:t,:j,:i])
 # using CSV
 # CSV.write("test4.csv",data)
-m = GLFixedEffectModels.@formula y ~ x + GLFixedEffectModels.fe(i)*GLFixedEffectModels.fe(t) + GLFixedEffectModels.fe(j)*GLFixedEffectModels.fe(t) + GLFixedEffectModels.fe(i)*GLFixedEffectModels.fe(j)
-x = GLFixedEffectModels.nlreg(data, m, Poisson(), LogLink(), start = [0.2], save=[:mu,:eta])
+m = GLFixedEffectModels.@formula y ~ x1 + x2 + GLFixedEffectModels.fe(i)*GLFixedEffectModels.fe(t) + GLFixedEffectModels.fe(j)*GLFixedEffectModels.fe(t) + GLFixedEffectModels.fe(i)*GLFixedEffectModels.fe(j)
+x = GLFixedEffectModels.nlreg(data, m, Poisson(), LogLink(), start = [0.2,0.2], save=[:mu,:eta])
 x_afterbc = GLFixedEffectModels.bias_correction(x, data; i_symb = :i, j_symb = :j, t_symb = :t, panel_structure = :network)
-@test x_afterbc.coef ≈ [-0.0088560] atol = 1e-4
+@test x_afterbc.coef ≈ [1.0005518;0.8922288] atol = 1e-4
+@test sqrt.([x_afterbc.vcov[1,1], x_afterbc.vcov[2,2]]) ≈ [0.2221267;0.2214389] atol = 1e-4
 
-#= Test 5, example from ppml_fe_bias
+# Test 5: Two-way poisson, Network structure
+m = GLFixedEffectModels.@formula y ~ x1 + x2 + GLFixedEffectModels.fe(i)*GLFixedEffectModels.fe(t) + GLFixedEffectModels.fe(j)*GLFixedEffectModels.fe(t)
+x = GLFixedEffectModels.nlreg(data, m, Poisson(), LogLink(), start = [0.2,0.2], save=[:mu,:eta])
+x_afterbc = GLFixedEffectModels.bias_correction(x, data; i_symb = :i, j_symb = :j, t_symb = :t, panel_structure = :network)
+@test sqrt.([x_afterbc.vcov[1,1], x_afterbc.vcov[2,2]]) ≈ [0.1930318;0.1652417] atol = 1e-4
+
+#= Test 6, example from ppml_fe_bias
 using CSV
 df_pois = CSV.read("PPMLFEBIAS_EXAMPLE_DATA.csv",DataFrame)
 m = GLFixedEffectModels.@formula trade ~ fta + GLFixedEffectModels.fe(imp) * GLFixedEffectModels.fe(year) + GLFixedEffectModels.fe(exp) * GLFixedEffectModels.fe(year) + GLFixedEffectModels.fe(imp) * GLFixedEffectModels.fe(exp)
