@@ -36,12 +36,9 @@
 #                  |    2    |  it + jt + ij            |          YES           |                      |  Weidner and Zylkin (2020)
 # --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-
-
-
-############################################################
+###################################################################
 #                   Main Function bias_correction()               #
-############################################################
+###################################################################
 
 """
     bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{Symbol,Nothing}=nothing,j_symb::Union{Symbol,Nothing}=nothing,t_symb::Union{Symbol,Nothing}=nothing,L::Int64=0,panel_structure::Symbol=:classic)
@@ -68,6 +65,7 @@ We only support the following models:
 - Binomial regression, Logit link, Three-way, Network
 - Binomial regression, Probit link, Three-way, Network
 - Poisson regression, Log link, Three-way, Network
+- Poisson regression, Log link, Two-way, Network
 """
 function bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{Symbol,Nothing}=nothing,j_symb::Union{Symbol,Nothing}=nothing,t_symb::Union{Symbol,Nothing}=nothing,L::Int64=0,panel_structure::Symbol=:classic)
     @assert :mu in propertynames(model.augmentdf) and :eta in propertynames(model.augmentdf) "please save :eta and :mu before bias correction"
@@ -119,7 +117,7 @@ function bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{S
         (ProbitLink, Binomial, 2, :network), # Hinz, Stammann and Wanner (2020) & Fernández-Val and Weidner (2016)
         (LogitLink, Binomial, 3, :network), # Hinz, Stammann and Wanner (2020)
         (ProbitLink, Binomial, 3, :network), # Hinz, Stammann and Wanner (2020)
-        # (LogLink, Poisson, 2, :network), # Weidner and Zylkin (2021), JIE. (TO-DO: support two-way)
+        (LogLink, Poisson, 2, :network), # Weidner and Zylkin (2021), JIE
         (LogLink, Poisson, 3, :network) # Weidner and Zylkin (2021), JIE
     ]
     this_model_type = (model.link,model.distribution,length(fes_in_formula),panel_structure)
@@ -236,22 +234,24 @@ function biascorr_poisson(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::I
     λ = model.augmentdf.mu[df.old_ind]
     @assert all([fe_key==:ij || fe_symb !== nothing for (fe_key,fe_symb) in fes]) "You need either a three-way FE model or a two-way FE model with i#j being left out"
     
-    
     # print("pre-demeaning")
     # @time begin
     # type: it + jt + ij, Need bias correction and standard error correction
-    i_levels = levels(df[model.esample[df.old_ind],fes[:ij][1]])
-    j_levels = levels(df[model.esample[df.old_ind],fes[:ij][2]])
-    t_levels = levels(df[model.esample[df.old_ind],fes[:it][2]])
+    i_ind = df[model.esample[df.old_ind],fes[:it][1]]
+    j_ind = df[model.esample[df.old_ind],fes[:jt][1]]
+    t_ind = df[model.esample[df.old_ind],fes[:it][2]]
+    i_levels = levels(i_ind)
+    j_levels = levels(j_ind)
+    t_levels = levels(t_ind)
     I = length(i_levels)
     J = length(j_levels)
     # @assert I==J "number of exporters is different from number of importers"
     T = length(t_levels)
     
     # assume balanced panel
-    y_sum_by_ij = zeros(size(y))
-    λ_sum_by_ij = zeros(size(λ))
-    for groupSeg in get_group_seg(df[model.esample[df.old_ind],fes[:ij][1]], df[model.esample[df.old_ind],fes[:ij][2]])
+    y_sum_by_ij = similar(y)
+    λ_sum_by_ij = similar(λ)
+    for groupSeg in get_group_seg(i_ind, j_ind)
         y_sum_by_ij[groupSeg] .= sum(y[groupSeg])
         λ_sum_by_ij[groupSeg] .= sum(λ[groupSeg])
     end
@@ -259,8 +259,10 @@ function biascorr_poisson(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::I
     y_sum_ij = reshape(y_sum_by_ij,(I,J,T))[:,:,1]
     λ_sum_ij = reshape(λ_sum_by_ij,(I,J,T))[:,:,1]
     ϑ_ijt = reshape(ϑ,(I,J,T))
+    λ_ijt = reshape(λ,(I,J,T))
     # Construct S
-    S = y - ϑ .* y_sum_by_ij
+    # S = y - ϑ .* y_sum_by_ij
+    S = y - λ
     S_ijt = reshape(S,(I,J,T))
     # println(H)
     # Construct G
@@ -271,8 +273,10 @@ function biascorr_poisson(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::I
     all(isfinite, weights) || throw("Weights are not finite")
     fes_fixedeffectarray = Array{FixedEffect,1}()
     for (fe_key,fe_symb) in fes
-        fe_fixedeffectobject = FixedEffect(df[model.esample[df.old_ind], fe_symb[1]], df[model.esample[df.old_ind], fe_symb[2]])
-        push!(fes_fixedeffectarray,fe_fixedeffectobject)
+        if fe_symb !== nothing
+            fe_fixedeffectobject = FixedEffect(df[model.esample[df.old_ind], fe_symb[1]], df[model.esample[df.old_ind], fe_symb[2]])
+            push!(fes_fixedeffectarray,fe_fixedeffectobject)
+        end
     end
     feM = AbstractFixedEffectSolver{Float64}(fes_fixedeffectarray, weights, Val{:cpu}) # CPU/GPU??? might need more attention in the future when implement GPU
     Xdemean, b, converged = FixedEffects.solve_residuals!(X, feM)
@@ -296,26 +300,21 @@ function biascorr_poisson(model::GLFixedEffectModel,df::DataFrame,fes::Dict,L::I
         D̂ = zeros(K)
         D!(D̂,K,I,J,T,ϑ_ijt,λ_sum_ij,y_sum_ij,Xdemean_ijtk,S_ijt)
         D̂ = D̂ ./ (N - 1)
-        Ŵ = model.hessian./(N*(N-1)) # This returns the same result with PPML_FE_BIAS but is not what is written in the paper
+        Ŵ = model.hessian./(N*(N-1))
         β = model.coef - Ŵ \ (B̂ + D̂) ./ (N-1)
-        ####### This function replicates the result from PPML_FE_BIAS.ado, but I also found something confusing when comparing the code with the paper
-        #### 1. (Section A.2.1 Analytical Bias Correction Formula) PPML_FE_BIAS.ado also add terms where i == j when constructing B̂ and D̂ (I add this in our code too to produce the exact same result)
-        #### 2. signs of some elements of G are different in the code and in the paper?? (might be their typo in the paper)
-        #### 3. the construction of Ŵ
 
         ###############################
         #  Standard Error Correction  #
         ###############################
-        # new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+        new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,model.hessian,ϑ_ijt,λ_sum_ij,S_ijt)
     else # it + jt 
         β = model.coef
-        Ŵ = model.hessian./(N*(N-1))
-        # new_vcov = get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+        new_vcov = get_new_vcov_twoway(I,J,T,K,Xdemean_ijtk,model.hessian,λ_ijt,S_ijt)
     end
 
     return GLFixedEffectModel(
         β,
-        model.vcov, # new_vcov, need to be implemented
+        new_vcov,
         model.vcov_type,
         model.nclusters,
         model.iterations,
@@ -342,7 +341,7 @@ end
 ###########################################
 
 function group_sums(M::Array{Float64,2},w::Array{Float64,1},group_seg::Vector{Vector{Int64}})
-    P = size(M)[2] # number of regressos P
+    P = size(M,2) # number of regressos P
     b_temp = zeros(P)
 
     for seg_index in group_seg
@@ -520,6 +519,11 @@ function H̄_ij(i,j,ϑ_ijt,λ_sum_ij)
     return (- ϑ_ijt[i,j,:] * ϑ_ijt[i,j,:]' + Diagonal(ϑ_ijt[i,j,:])) .* λ_sum_ij[i,j] 
 end
 
+function Λ_ij(i,j,λ_ijt)
+    # H̄[i,j,:,:]
+    return Diagonal(λ_ijt[i,j,:])
+end
+
 function G_ij_times_x_ijk(i,j,k,Xdemean_ijtk,T,ϑ_ijt,y_sum_ij)
     # [Gij * xij,k]_st
     result = zeros(T,T)
@@ -591,20 +595,38 @@ end
 
 function Ω(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
     corrected_Ω = zeros(K,K)
+    HH = inv_W_ϕ_constructor(I,J,T,ϑ_ijt,λ_sum_ij)
     for i in 1:I
         for j in 1:J
             # construct Var(S_ij|x_ij)
             # Xdemean_ijtk[i,j,:,:] is T-by-K
             bias1 = Xdemean_ijtk[i,j,:,:] * inv(Ŵ) * transpose(Xdemean_ijtk[i,j,:,:])
-            bias2 = d_ij_constructor(i,j,I,J,T) * inv_W_ϕ_constructor(I,J,T,ϑ_ijt,λ_sum_ij) * transpose(d_ij_constructor(i,j,I,J,T))
-            println(bias2)
-            lev_correction = LinearAlgebra.I(T) - ( H̄_ij(i,j,ϑ_ijt,λ_sum_ij) * (bias1+bias2) ) ./ (I*(J-1))
+            bias2 = d_ij_constructor(i,j,I,J,T) * HH * transpose(d_ij_constructor(i,j,I,J,T))
+            lev_correction = LinearAlgebra.I(T) - ( H̄_ij(i,j,ϑ_ijt,λ_sum_ij) * (bias1+bias2) )
             EŜŜ = S_ijt[i,j,:] * transpose(S_ijt[i,j,:])
             ESS = lev_correction \ EŜŜ
             corrected_Ω += transpose(Xdemean_ijtk[i,j,:,:]) * ESS * Xdemean_ijtk[i,j,:,:]
         end
     end
-    return corrected_Ω ./ (I*(J-1))
+    return corrected_Ω ./ (I*J)
+end
+
+function Ω_twoway(I,J,T,K,Xdemean_ijtk,Ŵ,λ_ijt,S_ijt)
+    corrected_Ω = zeros(K,K)
+    HH = inv_W_ϕ_constructor_twoway(I,J,T,λ_ijt)
+    for i in 1:I
+        for j in 1:J
+            # construct Var(S_ij|x_ij)
+            # Xdemean_ijtk[i,j,:,:] is T-by-K
+            bias1 = Xdemean_ijtk[i,j,:,:] * inv(Ŵ) * transpose(Xdemean_ijtk[i,j,:,:])
+            bias2 = d_ij_constructor(i,j,I,J,T) * HH * transpose(d_ij_constructor(i,j,I,J,T))
+            lev_correction = LinearAlgebra.I(T) - (Λ_ij(i,j,λ_ijt) * (bias1+bias2) )
+            EŜŜ = S_ijt[i,j,:] * transpose(S_ijt[i,j,:])
+            ESS = lev_correction \ EŜŜ
+            corrected_Ω += transpose(Xdemean_ijtk[i,j,:,:]) * ESS * Xdemean_ijtk[i,j,:,:]
+        end
+    end
+    return corrected_Ω ./ (I*J)
 end
 
 function inv_W_ϕ_constructor(I,J,T,ϑ_ijt,λ_sum_ij)
@@ -626,8 +648,29 @@ function inv_W_ϕ_constructor(I,J,T,ϑ_ijt,λ_sum_ij)
     end
     Hαγ = cell2full(H_ij_full)
     Hϕϕ = [Hαα Hαγ;transpose(Hαγ) Hγγ]
-    print(Hϕϕ)
-    return inv(Hϕϕ)
+    return pinv(Hϕϕ)
+end
+
+function inv_W_ϕ_constructor_twoway(I,J,T,λ_ijt)
+    H_ij_full = Array{Array{Float64,2},2}(undef,I,J)
+    for i in 1:I
+        for j in 1:J
+            H_ij_full[i,j] = Λ_ij(i,j,λ_ijt)
+        end
+    end
+    Hαα = zeros(I*T,I*T)
+    Hγγ = zeros(J*T,J*T)
+    H̄_sum_along_i_fix_j = sum(H_ij_full,dims=1)
+    H̄_sum_along_j_fix_i = sum(H_ij_full,dims=2)
+    for i in 1:I
+        Hαα[((i-1)*T+1) : i*T, ((i-1)*T+1) : i*T] = H̄_sum_along_j_fix_i[i]
+    end
+    for j in 1:J
+        Hγγ[((j-1)*T+1) : j*T, ((j-1)*T+1) : j*T] = H̄_sum_along_i_fix_j[j]
+    end
+    Hαγ = cell2full(H_ij_full)
+    Hϕϕ = [Hαα Hαγ;transpose(Hαγ) Hγγ]
+    return pinv(Hϕϕ)
 end
 
 function d_ij_constructor(i,j,I,J,T)
@@ -640,11 +683,17 @@ function d_ij_constructor(i,j,I,J,T)
 end
 
 function get_new_vcov(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
-    corected_Ω = Ω(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
+    corrected_Ω = Ω(I,J,T,K,Xdemean_ijtk,Ŵ,ϑ_ijt,λ_sum_ij,S_ijt)
     inv_Ŵ = inv(Ŵ)
-    new_vcov = inv_Ŵ * corected_Ω * inv_Ŵ
-    println(corected_Ω)
-    return new_vcov ./ (I*(J-1))
+    new_vcov = inv_Ŵ * corrected_Ω * inv_Ŵ
+    return new_vcov .* ((I*J) * (I*J)/(I*J-1))
+end
+
+function get_new_vcov_twoway(I,J,T,K,Xdemean_ijtk,Ŵ,λ_ijt,S_ijt)
+    corrected_Ω = Ω_twoway(I,J,T,K,Xdemean_ijtk,Ŵ,λ_ijt,S_ijt)
+    inv_Ŵ = inv(Ŵ)
+    new_vcov = inv_Ŵ * corrected_Ω * inv_Ŵ
+    return new_vcov .* ((I*J) * (I*J)/(I*J-1))
 end
 
 function cell2full(cell::Matrix{Matrix{Float64}})
