@@ -6,7 +6,7 @@
 ![Lifecycle](https://img.shields.io/badge/lifecycle-retired-orange.svg)
 ![Lifecycle](https://img.shields.io/badge/lifecycle-archived-red.svg)
 ![Lifecycle](https://img.shields.io/badge/lifecycle-dormant-blue.svg) -->
-![example branch parameter](https://github.com/jmboehm/GLFixedEffectModels.jl/actions/workflows/ci.yml/badge.svg?branch=master) [![codecov.io](http://codecov.io/github/jmboehm/RegressionTables.jl/coverage.svg?branch=master)](http://codecov.io/github/jmboehm/RegressionTables.jl?branch=master) [![DOI](https://zenodo.org/badge/164128032.svg)](https://zenodo.org/badge/latestdoi/164128032)
+![example branch parameter](https://github.com/jmboehm/GLFixedEffectModels.jl/actions/workflows/ci.yml/badge.svg?branch=master) [![codecov.io](http://codecov.io/github/jmboehm/GLFixedEffectModels.jl/coverage.svg?branch=master)](http://codecov.io/github/jmboehm/GLFixedEffectModels.jl?branch=master) [![DOI](https://zenodo.org/badge/164128032.svg)](https://zenodo.org/badge/latestdoi/164128032)
 
 This package estimates generalized linear models with high dimensional categorical variables. It builds on Matthieu Gomez's [FixedEffects.jl](https://github.com/FixedEffects/FixedEffects.jl) and Amrei Stammann's [Alpaca](https://github.com/amrei-stammann/alpaca).
 
