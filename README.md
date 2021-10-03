@@ -6,7 +6,7 @@
 ![Lifecycle](https://img.shields.io/badge/lifecycle-retired-orange.svg)
 ![Lifecycle](https://img.shields.io/badge/lifecycle-archived-red.svg)
 ![Lifecycle](https://img.shields.io/badge/lifecycle-dormant-blue.svg) -->
-![example branch parameter](https://github.com/jmboehm/GLFixedEffectModels.jl/actions/workflows/ci.yml/badge.svg?branch=master) [![Coverage Status](https://coveralls.io/repos/github/jmboehm/GLFixedEffectModels.jl/badge.svg?branch=master)](https://coveralls.io/github/jmboehm/GLFixedEffectModels.jl?branch=master)
+![example branch parameter](https://github.com/jmboehm/GLFixedEffectModels.jl/actions/workflows/ci.yml/badge.svg?branch=master) [![codecov.io](http://codecov.io/github/jmboehm/RegressionTables.jl/coverage.svg?branch=master)](http://codecov.io/github/jmboehm/RegressionTables.jl?branch=master) [![DOI](https://zenodo.org/badge/164128032.svg)](https://zenodo.org/badge/latestdoi/164128032)
 
 This package estimates generalized linear models with high dimensional categorical variables. It builds on Matthieu Gomez's [FixedEffects.jl](https://github.com/FixedEffects/FixedEffects.jl) and Amrei Stammann's [Alpaca](https://github.com/amrei-stammann/alpaca).
 
@@ -50,12 +50,14 @@ The required arguments are:
 * `df`: a Table
 * `formula`: A formula created using `@formula`.
 * `distribution`: A `Distribution`. See the documentation of [GLM.jl](https://juliastats.org/GLM.jl/stable/manual/#Fitting-GLM-models-1) for valid distributions.
-* `link`: A `Link` function. See the documentation of [GLM.jl](https://juliastats.org/GLM.jl/stable/manual/#Fitting-GLM-models-1) for valid link functions.
+* `link`: A `GLM.Link` function. See the documentation of [GLM.jl](https://juliastats.org/GLM.jl/stable/manual/#Fitting-GLM-models-1) for valid link functions.
 * `vcov`: A `CovarianceEstimator` to compute the variance-covariance matrix.
 
 The optional arguments are:
 * `save::Union{Bool, Symbol} = false`: Should residuals and eventual estimated fixed effects saved in a dataframe? Use `save = :residuals` to only save residuals. Use `save = :fe` to only save fixed effects.
 * `method::Symbol`: A symbol for the method. Default is `:cpu`. Alternatively, `:gpu` requires `CuArrays`. In this case, use the option `double_precision = false` to use `Float32`. This option is the same as for the [FixedEffectModels.jl](https://github.com/FixedEffects/FixedEffectModels.jl) package.
+* `double_precision::Bool = true`: Uses 64-bit floats if `true`, otherwise 32-bit.
+* `drop_singletons = true` : drop observations that are perfectly classified.
 * `contrasts::Dict = Dict()` An optional Dict of contrast codings for each categorical variable in the `formula`.  Any unspecified variables will have `DummyCoding`.
 * `maxiter::Integer = 1000`: Maximum number of iterations in the Newton-Raphson routine.
 * `maxiter_center::Integer = 10000`: Maximum number of iterations for centering procedure.
@@ -67,15 +69,29 @@ The optional arguments are:
 * `separation::Symbol = :ignore` : Method to detect/deal with [separation](https://github.com/sergiocorreia/ppmlhdfe/blob/master/guides/separation_primer.md). Currently supported values are `:none`, `:ignore` and `:mu`. `:none` checks for observations that are outside `[separation_mu_lbound,separation_mu_ubound]`, and gives a warning, but does not do anything. `:ignore` does not check (and may therefore be slightly faster than the other options). `:mu` truncates mu at `separation_mu_lbound` or `separation_mu_ubound`. 
 * `separation_mu_lbound::Real = -Inf` : Lower bound for the separation detection/correction heuristic (on mu). What a reasonable value would be depends on the model that you're trying to fit.
 * `separation_mu_ubound::Real = Inf` : Upper bound for the separation detection/correction heuristic.
+* `verbose::Bool = false` : If `true`, prints output on each iteration.
+
+The function returns a `GLFixedEffectModel` object which supports the `StatsBase.RegressionModel` abstraction. It can be displayed in table form by using [RegressionTables.jl](https://github.com/jmboehm/RegressionTables.jl).
+
+## Bias correction methods
+
+The package experimentally supports bias correction methods for the following models:
+- Binomial regression, Logit link, Two-way, Classic (Fernández-Val and Weidner (2016, 2018))
+- Binomial regression, Probit link, Two-way, Classic (Fernández-Val and Weidner (2016, 2018))
+- Binomial regression, Logit link, Two-way, Network (Hinz, Stammann and Wanner (2020) & Fernández-Val and Weidner (2016))
+- Binomial regression, Probit link, Two-way, Network (Hinz, Stammann and Wanner (2020) & Fernández-Val and Weidner (2016))
+- Binomial regression, Logit link, Three-way, Network (Hinz, Stammann and Wanner (2020))
+- Binomial regression, Probit link, Three-way, Network (Hinz, Stammann and Wanner (2020))
+- Poisson regression, Log link, Three-way, Network (Weidner and Zylkin (2021))
+- Poisson regression, Log link, Two-way, Network (Weidner and Zylkin (2021))
 
 ## Things that still need to be implemented
 
 - Better default starting values
-- Bias correction
 - Weights
+- More options of dealing with separation
 - Better StatsBase interface & prediction
 - Better benchmarking
-- Integration with [RegressionTables.jl](https://github.com/jmboehm/RegressionTables.jl)
 
 ## Related Julia packages
 
@@ -84,10 +100,18 @@ The optional arguments are:
 - [Alpaca.jl](https://github.com/jmboehm/Alpaca.jl) is a wrapper to the [Alpaca R package](https://github.com/amrei-stammann/alpaca), which solves the same tasks as this package.
 - [GLM.jl](https://github.com/JuliaStats/GLM.jl) estimates generalized linear models, but without explicit support for categorical regressors.
 - [Econometrics.jl](https://github.com/Nosferican/Econometrics.jl) provides routines to estimate multinomial logit and other models.
-- [RegressionTables.jl](https://github.com/jmboehm/RegressionTables.jl) will, in the future, support pretty printing of results from this package.
+- [RegressionTables.jl](https://github.com/jmboehm/RegressionTables.jl) supports pretty printing of results from this package.
 
 ## References
 
+Fernández-Val, I. and Weidner, M., 2016. Individual and time effects in nonlinear panel models with large N, T. Journal of Econometrics, 192(1), pp.291-312.
+
+Fernández-Val, I. and Weidner, M., 2018. Fixed effects estimation of large-T panel data models. Annual Review of Economics, 10, pp.109-138.
+
 Fong, DC. and Saunders, M. (2011) *LSMR: An Iterative Algorithm for Sparse Least-Squares Problems*.  SIAM Journal on Scientific Computing
 
+Hinz, J., Stammann, A. and Wanner, J., 2021. State dependence and unobserved heterogeneity in the extensive margin of trade. 
+
 Stammann, A. (2018) *Fast and Feasible Estimation of Generalized Linear Models with High-Dimensional k-way Fixed Effects*. Mimeo, Heinrich-Heine University Düsseldorf
+
+Weidner, M. and Zylkin, T., 2021. Bias and consistency in three-way gravity models. Journal of International Economics, 132, p.103513.
