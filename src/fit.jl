@@ -191,37 +191,37 @@ function nlreg(@nospecialize(df),
     tss_total = tss(y, has_intercept | has_fe_intercept, Weights(Ones{Float64}(sum(esample))))
 
     # used to compute tss even without save_fe
-    if save_fe
-        oldy = deepcopy(y)
-        oldX = deepcopy(Xexo)
-    end
+    oldy = deepcopy(y)
+    oldX = deepcopy(Xexo)
 
     # construct fixed effects object and solver
     fes = FixedEffect[_subset(fe, esample) for fe in fes]
     weights = Weights(Ones{Float64}(sum(esample)))
     feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
 
-    # some constants
-    coeflength = size(Xexo,2)
+    basecoef = trues(size(oldX,2)) # basecoef contains the information of the dropping of the regressors.
 
-    if start != nothing
+    # mark this as the start of a rerun, when collinearity is detected, rerun from here.
+    @label rerun
+
+    coeflength = sum(basecoef)
+    if start !== nothing
         (length(start) == coeflength) || error("Invalid length of `start` argument.")
         beta = start
     else
         beta = 0.1 .* ones(Float64, coeflength)
     end
 
+    Xexo = GLFixedEffectModels.getcols(oldX, basecoef) # get Xexo from oldX and basecoef
     eta = Xexo * beta
     mu = GLM.linkinv.(Ref(link),eta)
     wt = ones(Float64, nobs, 1)
     dev = sum(devresid.(Ref(distribution), y, mu))
     nulldev = sum(devresid.(Ref(distribution), mean(y), mu))
 
-    X = Xexo
     Xhat = Xexo
     crossx = Matrix{Float64}(undef, nobs, 0)
     residuals = y # just for initialization
-    basecoef = BitArray{size(X,2)}
 
     # Stuff that we need in outside scope
     emp = Array{Float64,2}(undef,2,2)
@@ -305,9 +305,20 @@ function nlreg(@nospecialize(df),
         end
 
         basecolXexo = GLFixedEffectModels.basecol(Xdemean)
+        if all(basecolXexo)
+        else
+            remaining_cols = findall(basecoef)
+            regressor_ind_to_be_dropped = remaining_cols[.~basecolXexo]
+            basecoef[regressor_ind_to_be_dropped] .= 0 # update basecoef
+
+            # throw info
+            @info "Multicollinearity detected. Dropping regressors: $(join(coef_names[regressor_ind_to_be_dropped]," "))"
+
+            @goto rerun
+        end
+
         Xexo2 = GLFixedEffectModels.getcols(Xdemean, basecolXexo)
         Xhat = Xexo2
-        basecoef = basecolXexo
         crossx = cholesky!(Symmetric(Xhat' * Xhat))
 
         beta_update = crossx \ (Xhat' * nudemean)
@@ -431,7 +442,7 @@ function nlreg(@nospecialize(df),
             end
         end
     end
-    _n_coefs = size(X, 2) + dof_absorb + dof_add
+    _n_coefs = sum(basecoef) + dof_absorb + dof_add
     dof_residual_ = max(1, nobs - _n_coefs)
 
     nclusters = nothing
