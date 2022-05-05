@@ -94,7 +94,7 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
 
         if converged == false
             @warn "Convergence of annihilation procedure not achieved in $(iterations) iterations; try increasing dmaxiter or decreasing dtol."
-            @warn "cannot identify separated obs because can't solve lsmr. Skipping ..."
+            @warn "Cannot identify separated obs because can't solve lsmr. Skipping ..."
             return esample, y, Xexo, fes
         end
 

@@ -214,7 +214,7 @@ function nlreg(@nospecialize(df),
         @assert all(0 .<= y .<= 1)
         if :fe ∈ separation
             esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 0)
-            esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xeox, fes; sep_at = 1)
+            esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 1)
         end
         if :ReLU ∈ separation
             esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes;
