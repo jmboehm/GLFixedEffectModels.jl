@@ -207,17 +207,20 @@ function nlreg(@nospecialize(df),
             esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 0)
         end
         if :ReLU ∈ separation
-            esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes)
+            esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes; 
+                double_precision = double_precision, method = method, verbose = verbose)
         end
     elseif link isa Union{ProbitLink, LogitLink}
         @assert all(0 .<= y .<= 1)
         if :fe ∈ separation
             esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 0)
-            esample, y, Xexo, fes = etect_sep_fe!(esample, y, Xeox, fes; sep_at = 1)
+            esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xeox, fes; sep_at = 1)
         end
         if :ReLU ∈ separation
-            esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes)
-            esample, y, Xexo, fes = detect_sep_relu!(esample, 1 .- y[:], Xexo, fes)
+            esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes;
+                double_precision = double_precision, method = method, verbose = verbose)
+            esample, y, Xexo, fes = detect_sep_relu!(esample, 1 .- y[:], Xexo, fes;
+                double_precision = double_precision, method = method, verbose = verbose)
             y = 1 .- y
         end
     else

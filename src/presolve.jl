@@ -50,8 +50,8 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
     double_precision::Bool = true,
     dtol::Real = sqrt(eps(double_precision ? Float64 : Float32)), # tol for solve_coefficients and solve_residuals
     dmaxiter::Integer = 100_000, # maxiter for solve_coefficients and solve_residuals
-    rtol::Real = 1e-3, # tol for ReLU
-    rmaxiter::Integer = 1000, # maxiter for ReLU
+    rtol::Real = 1e-4, # tol for ReLU
+    rmaxiter::Integer = 100, # maxiter for ReLU
     method::Symbol = :cpu,
     verbose::Bool = false 
     )
