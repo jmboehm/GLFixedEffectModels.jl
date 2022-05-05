@@ -56,6 +56,8 @@ include("vcov/Vcov.jl")
 
 include("fit.jl")
 
+include("presolve.jl")
+
 # precompile script
 df = DataFrame(y = rand(10), x = 1:10, id = repeat([1, 2], 5))
 nlreg(df, @formula(y ~ x + fe(id)), Binomial(), GLM.LogitLink())

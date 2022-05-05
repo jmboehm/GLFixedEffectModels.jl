@@ -55,7 +55,7 @@ function nlreg(@nospecialize(df),
     rho_tol::Real = 1.0e-8, # tolerance level for the stephalving in the maximization routine.
     step_tol::Real = 1.0e-8, # tolerance level that accounts for rounding errors inside the stephalving routine
     center_tol::Real = double_precision ? 1e-8 : 1e-6, # tolerance level for the stopping condition of the centering algorithm.
-    separation::Symbol = :ignore, # method to detect and/or deal with separation
+    separation::Vector{Symbol} = Symbol[], # method to detect and/or deal with separation
     separation_mu_lbound::Real = -Inf,
     separation_mu_ubound::Real = Inf,
     @nospecialize(vcovformula::Union{Symbol, Expr, Nothing} = nothing),
@@ -140,10 +140,6 @@ function nlreg(@nospecialize(df),
             end
         end
     end
-    save_fe = (:fe ∈ save) & has_fes 
-
-    nobs = sum(esample)
-    (nobs > 0) || throw("sample is empty")
 
     has_intercept = hasintercept(formula)
     has_fe_intercept = false
@@ -153,8 +149,7 @@ function nlreg(@nospecialize(df),
         end
     end
 
-    # Compute data for std errors
-    vcov_method = Vcov.materialize(view(df, esample, :), vcov)
+    save_fe = (:fe ∈ save) & has_fes 
 
     ##############################################################################
     ##
@@ -187,21 +182,64 @@ function nlreg(@nospecialize(df),
     # end
     # all(isfinite, values(weights)) || throw("Weights are not finite")
 
-    # compute tss now before potentially demeaning y
-    tss_total = tss(y, has_intercept | has_fe_intercept, Weights(Ones{Float64}(sum(esample))))
-
-    # used to compute tss even without save_fe
-    oldy = deepcopy(y)
-    oldX = deepcopy(Xexo)
+    ########################################################################
+    ##
+    ## Presolve:
+    ## Step 1. Check Multicollinearity among X.
+    ## Step 2. Check Separation
+    ##
+    ########################################################################
 
     # construct fixed effects object and solver
     fes = FixedEffect[_subset(fe, esample) for fe in fes]
+
+    basecoef = trues(size(Xexo,2)) # basecoef contains the information of the dropping of the regressors.
+    # esample contains the information of the dropping of the observations.
+
+    Xexo, basecoef = detect_linear_dependency_among_X!(Xexo, basecoef; coefnames=coef_names)
+
+    if :simplex ∈ separation
+        @warn "simplex not implemented, will ignore."
+    end
+    
+    if link isa LogLink
+        if :fe ∈ separation
+            esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 0)
+        end
+        if :ReLU ∈ separation
+            esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes)
+        end
+    elseif link isa Union{ProbitLink, LogitLink}
+        @assert all(0 .<= y .<= 1)
+        if :fe ∈ separation
+            esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 0)
+            esample, y, Xexo, fes = etect_sep_fe!(esample, y, Xeox, fes; sep_at = 1)
+        end
+        if :ReLU ∈ separation
+            esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes)
+            esample, y, Xexo, fes = detect_sep_relu!(esample, 1 .- y[:], Xexo, fes)
+            y = 1 .- y
+        end
+    else
+        @warn "Unrecognized link. Skip separation detection."
+    end
+    
     weights = Weights(Ones{Float64}(sum(esample)))
     feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
 
-    basecoef = trues(size(oldX,2)) # basecoef contains the information of the dropping of the regressors.
+    # make one copy after deleting NAs + dropping singletons + detecting separations (fe + relu)
+    oldy = deepcopy(y)
+    oldX = deepcopy(Xexo)
+    nobs = sum(esample)
+    (nobs > 0) || throw("sample is empty")
 
-    # mark this as the start of a rerun, when collinearity is detected, rerun from here.
+    # compute tss now before potentially demeaning y
+    tss_total = tss(y, has_intercept | has_fe_intercept, Weights(Ones{Float64}(sum(esample))))
+
+    # Compute data for std errors
+    vcov_method = Vcov.materialize(view(df, esample, :), vcov)
+
+    # mark this as the start of a rerun when collinearity among X and fe is detected, rerun from here.
     @label rerun
 
     coeflength = sum(basecoef)
@@ -238,7 +276,7 @@ function nlreg(@nospecialize(df),
         mymueta = GLM.mueta.(Ref(link),eta)
 
         # Check for separation, if we do
-        if (separation != :ignore)
+        if isempty(separation) # if separation method is specified
             # use the bounds to detect 
             min_mueta = minimum(mymueta)
             max_mueta = maximum(mymueta)
@@ -248,7 +286,7 @@ function nlreg(@nospecialize(df),
                 problematic = ((mymueta .< separation_mu_lbound) .| (mymueta .> separation_mu_ubound) .| (mu .< separation_mu_lbound) .| (mu .> separation_mu_ubound))
                 @warn "$(sum(problematic)) observation(s) exceed the lower or upper bounds. Likely reason is statistical separation."
                 # deal with it
-                if separation == :mu
+                if :mu ∈ separation
                     mymueta[mymueta .< separation_mu_lbound] .= separation_mu_lbound 
                     mymueta[mymueta .> separation_mu_ubound] .= separation_mu_ubound
                     mu[mu .< separation_mu_lbound] .= separation_mu_lbound 
@@ -312,7 +350,7 @@ function nlreg(@nospecialize(df),
             basecoef[regressor_ind_to_be_dropped] .= 0 # update basecoef
 
             # throw info
-            @info "Multicollinearity detected. Dropping regressors: $(join(coef_names[regressor_ind_to_be_dropped]," "))"
+            @info "Multicollinearity detected among columns of X and FixedEffects. Dropping regressors: $(join(coef_names[regressor_ind_to_be_dropped]," "))"
 
             @goto rerun
         end
