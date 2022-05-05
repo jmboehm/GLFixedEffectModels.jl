@@ -3,13 +3,11 @@ function detect_sep_fe!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<: 
     before_n = sum(esample)
     sub_esample = trues(before_n)
 
-    fe = first(fes)
-    cache = trues(fe.n)
-    level_visited = falses(fe.n)
-
     @assert before_n == length(y) "esample and y have different length."
 
     for fe in fes
+        cache = trues(fe.n)
+        level_visited = falses(fe.n)
         @assert before_n == length(fe.refs) "esample and fe have different length."
         for i in 1:before_n
             # for cache = true finally, all y[i] must equal to sep_at
@@ -57,7 +55,7 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
     method::Symbol = :cpu,
     verbose::Bool = false 
     )
-
+    verbose && @info "identifying separations using ReLU."
     @assert all(GLFixedEffectModels.basecol(Xexo)) "There are Multicollinearity in the data, this should be done with before running ReLU."
 
     before_n = sum(esample)
@@ -75,9 +73,7 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
 
     for iter in 1:rmaxiter
 
-        if verbose
-            println("* iter $(iter)")
-        end
+        verbose && println("* iter $(iter)")
 
         @assert all(GLFixedEffectModels.basecol(Xexo)) "There are Multicollinearity in the data, this should be done with before running ReLU."
 
@@ -87,9 +83,8 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
         beta = crossx \ (Xexo' * u)
         xb = Xexo_copy * beta
 
-        if verbose
-            println("fitted value without fixed effects = ", xb)
-        end
+        
+        verbose && println("fitted value without fixed effects = ", xb)
 
         Xexo = deepcopy(Xexo_copy)
         newfes, b, c = solve_coefficients!(u - xb, feM; tol = dtol, maxiter = dmaxiter)
