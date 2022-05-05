@@ -69,35 +69,40 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
     weights = Weights(w)
     feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
 
-    converged = false
+    outer_converged = false
 
     for iter in 1:rmaxiter
-
+        iterations = Int[]
+        convergeds = Bool[]
         verbose && println("* iter $(iter)")
 
-        @assert all(GLFixedEffectModels.basecol(Xexo)) "There are Multicollinearity in the data, this should be done with before running ReLU."
-
         Xexo = deepcopy(Xexo_copy)
-        solve_residuals!(Xexo, feM; tol = dtol, maxiter = dmaxiter)
+        Xexo, b, c = solve_residuals!(Xexo, feM; tol = dtol, maxiter = dmaxiter)
+        append!(iterations, b)
+        append!(convergeds, c)
         crossx = cholesky!(Symmetric(Xexo' * Xexo))
         beta = crossx \ (Xexo' * u)
         xb = Xexo_copy * beta
-
         
-        verbose && println("fitted value without fixed effects = ", xb)
-
         Xexo = deepcopy(Xexo_copy)
         newfes, b, c = solve_coefficients!(u - xb, feM; tol = dtol, maxiter = dmaxiter)
-        xbd = sum(newfes) + xb
+        append!(iterations, b)
+        append!(convergeds, c)
 
-        if verbose
-            println("fitted value with fixed effects = ", xbd)
+        iterations = maximum(iterations)
+        converged = all(convergeds)
+
+        if converged == false
+            @warn "Convergence of annihilation procedure not achieved in $(iterations) iterations; try increasing dmaxiter or decreasing dtol."
+            @warn "cannot identify separated obs because can't solve lsmr. Skipping ..."
+            return esample, y, Xexo, fes
         end
 
+        xbd = sum(newfes) + xb
         xbd[abs.(xbd) .< rtol] .= 0
 
         if all(xbd.>=0)
-            converged = true
+            outer_converged = true
             is_sep = xbd .> 0
             @info "$(sum(is_sep)) observations detected as separated using the ReLU method. Dropping them ..."
             sub_esample = .~is_sep
@@ -116,16 +121,15 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
             Xexo = Xexo[sub_esample,:]
 
             return esample, y, Xexo, fes
+        else
+            verbose && println("negative xbd: $(sum(xbd.<0))")
         end
 
         u = xbd
         u[u .< 0] .= 0
-        if verbose
-            println("updated u = ", xbd)
-        end
     end
 
-    if ~converged
+    if ~outer_converged
         @warn "cannot identify separated obs. Maximal iteration reached. Skipping ..."
         return esample, y, Xexo, fes
     end
