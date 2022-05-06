@@ -54,7 +54,7 @@ function drop_singletons!(esample, fe::FixedEffect)
     end
     after_n = sum(esample)
     dropped_n = before_n - after_n
-    verbose && @info "$(dropped_n) observations detected as singletons. Dropping them ..."
+    @info "$(dropped_n) observations detected as singletons. Dropping them ..."
     return esample
 end
 
