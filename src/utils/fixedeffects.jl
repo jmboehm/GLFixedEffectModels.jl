@@ -40,6 +40,7 @@ end
 ##############################################################################
 
 function drop_singletons!(esample, fe::FixedEffect)
+    before_n = sum(esample)
     cache = zeros(Int, fe.n)
     for i in eachindex(esample)
         if esample[i]
@@ -51,6 +52,10 @@ function drop_singletons!(esample, fe::FixedEffect)
             esample[i] = false
         end
     end
+    after_n = sum(esample)
+    dropped_n = before_n - after_n
+    verbose && @info "$(dropped_n) observations detected as singletons. Dropping them ..."
+    return esample
 end
 
 ##############################################################################
