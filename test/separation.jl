@@ -2,6 +2,7 @@ using DataFrames
 include("../src/GLFixedEffectModels.jl")
 using .GLFixedEffectModels
 using Test
+using Downloads, CSV
 
 
 # test1 for collinearity
@@ -31,3 +32,22 @@ res1 = nlreg(df, @formula(y ~ fe(id)), Poisson(), LogLink() ; separation = [:fe]
 
 # ---------------------------------------------------------------------------------------------------------------- #
 
+#=
+clear
+input int(y x1 x2 x3)
+ 0   0   1  0
+ 0   0   0  0
+ 0   0   0  0
+ 0   0   0  0
+ 0   1   9  0
+ 2  21  21 21
+ 3   0   0  0
+ 5   0   0  0
+ 7   0   0  0
+10 -18 -18  0
+end
+=#
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/csv/example1.csv"
+df = DataFrame(CSV.File(Downloads.download(url)))
+df.id = ones(size(df,1))
+res1 = nlreg(df, @formula(y ~ x1 + x2 + x3 + x4 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])

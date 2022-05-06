@@ -50,8 +50,8 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
     double_precision::Bool = true,
     dtol::Real = sqrt(eps(double_precision ? Float64 : Float32)), # tol for solve_coefficients and solve_residuals
     dmaxiter::Integer = 100_000, # maxiter for solve_coefficients and solve_residuals
-    rtol::Real = 1e-4, # tol for ReLU
-    rmaxiter::Integer = 100, # maxiter for ReLU
+    rtol::Real = 1e-3, # tol for ReLU
+    rmaxiter::Integer = 1000, # maxiter for ReLU
     method::Symbol = :cpu,
     verbose::Bool = false 
     )
@@ -61,7 +61,7 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
     before_n = sum(esample)
     @assert before_n == length(y)
 
-    Xexo_copy = deepcopy(Xexo)
+    Xexo_copy = deepcopy(Float64.(Xexo))
 
     u = (y.==0)
     K = sum(u) / rtol^2
@@ -78,13 +78,15 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
 
         Xexo = deepcopy(Xexo_copy)
         Xexo, b, c = solve_residuals!(Xexo, feM; tol = dtol, maxiter = dmaxiter)
+        Xexo = sqrt.(w) .* Xexo
+        u = sqrt.(w) .* u
         append!(iterations, b)
         append!(convergeds, c)
         crossx = cholesky!(Symmetric(Xexo' * Xexo))
         beta = crossx \ (Xexo' * u)
         xb = Xexo_copy * beta
         
-        Xexo = deepcopy(Xexo_copy)
+        # something is wrong 
         newfes, b, c = solve_coefficients!(u - xb, feM; tol = dtol, maxiter = dmaxiter)
         append!(iterations, b)
         append!(convergeds, c)
@@ -94,8 +96,8 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
 
         if converged == false
             @warn "Convergence of annihilation procedure not achieved in $(iterations) iterations; try increasing dmaxiter or decreasing dtol."
-            @warn "Cannot identify separated obs because can't solve lsmr. Skipping ..."
-            return esample, y, Xexo, fes
+            @warn "Cannot identify separated obs because lsmr wasn't solved properly. Skipping ..."
+            return esample, y, Xexo_copy, fes
         end
 
         xbd = sum(newfes) + xb
@@ -117,10 +119,10 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
             # drop them in y
             y = y[sub_esample]
 
-            # drop them in Xexo
-            Xexo = Xexo[sub_esample,:]
+            # drop them in Xexo_copy
+            Xexo_copy = Xexo_copy[sub_esample,:]
 
-            return esample, y, Xexo, fes
+            return esample, y, Xexo_copy, fes
         else
             verbose && println("negative xbd: $(sum(xbd.<0))")
         end
@@ -131,7 +133,7 @@ function detect_sep_relu!(esample::BitVector, y::Vector{<: Real}, Xexo::Matrix{<
 
     if ~outer_converged
         @warn "cannot identify separated obs. Maximal iteration reached. Skipping ..."
-        return esample, y, Xexo, fes
+        return esample, y, Xexo_copy, fes
     end
 end
 

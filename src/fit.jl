@@ -135,8 +135,14 @@ function nlreg(@nospecialize(df),
     end
     if has_fes
         if drop_singletons
+            before_n = sum(esample)
             for fe in fes
                 drop_singletons!(esample, fe)
+            end
+            after_n = sum(esample)
+            dropped_n = before_n - after_n
+            if dropped_n > 0
+                @info "$(dropped_n) observations detected as singletons. Dropping them ..."
             end
         end
     end
@@ -196,6 +202,7 @@ function nlreg(@nospecialize(df),
     basecoef = trues(size(Xexo,2)) # basecoef contains the information of the dropping of the regressors.
     # esample contains the information of the dropping of the observations.
 
+    # pre separation detection check for collinearity
     Xexo, basecoef = detect_linear_dependency_among_X!(Xexo, basecoef; coefnames=coef_names)
 
     if :simplex ∈ separation
@@ -227,6 +234,9 @@ function nlreg(@nospecialize(df),
         @warn "Unrecognized link. Skip separation detection."
     end
     
+    # post separation detection check for collinearity
+    Xexo, basecoef = detect_linear_dependency_among_X!(Xexo, basecoef; coefnames=coef_names)
+
     weights = Weights(Ones{Float64}(sum(esample)))
     feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
 
