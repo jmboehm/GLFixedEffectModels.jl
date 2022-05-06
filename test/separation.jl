@@ -51,3 +51,20 @@ url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/cs
 df = DataFrame(CSV.File(Downloads.download(url)))
 df.id = ones(size(df,1))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + x3 + x4 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])
+
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/csv/example2.csv"
+df = DataFrame(CSV.File(Downloads.download(url)))
+df.id = ones(size(df,1))
+res1 = nlreg(df, @formula(y ~ x1 + x2 + x3 + x4 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])
+
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/csv/fe1.csv"
+df = DataFrame(CSV.File(Downloads.download(url)))
+res1 = nlreg(df, @formula(y ~ x1 + x2 + fe(i) + fe(j)), Poisson(), LogLink() ; separation = [:ReLU])
+
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/csv/fe2.csv"
+df = DataFrame(CSV.File(Downloads.download(url)))
+res1 = nlreg(df, @formula(y ~ x1 + fe(i) + fe(j)), Poisson(), LogLink() ; separation = [:ReLU])
+
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/csv/fe3.csv"
+df = DataFrame(CSV.File(Downloads.download(url)))
+res1 = nlreg(df, @formula(y ~ x1 + x2 + fe(i) + fe(j)), Poisson(), LogLink() ; separation = [:ReLU])

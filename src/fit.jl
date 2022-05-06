@@ -163,17 +163,24 @@ function nlreg(@nospecialize(df),
     ##
     ##############################################################################
     exo_vars = unique(StatsModels.termvars(formula))
-    subdf = Tables.columntable((; (x => disallowmissing(view(df[!, x], esample)) for x in exo_vars)...))
+    subdf = Tables.columntable((; (x => disallowmissing(view(df[!, x], :)) for x in exo_vars)...))
     formula_schema = apply_schema(formula, schema(formula, subdf, contrasts), GLFixedEffectModel, has_fe_intercept)
 
     # Obtain y
     # for a Vector{Float64}, conver(Vector{Float64}, y) aliases y
     y = convert(Vector{Float64}, response(formula_schema, subdf))
+    oldy = deepcopy(y)
+    y = y[esample]
     all(isfinite, y) || throw("Some observations for the dependent variable are infinite")
 
     # Obtain X
     Xexo = convert(Matrix{Float64}, modelmatrix(formula_schema, subdf))
+    oldX = deepcopy(Xexo)
+    Xexo = Xexo[esample,:]
     all(isfinite, Xexo) || throw("Some observations for the exogeneous variables are infinite")
+
+    basecoef = trues(size(Xexo,2)) # basecoef contains the information of the dropping of the regressors.
+    # while esample contains the information of the dropping of the observations.
 
     response_name, coef_names = coefnames(formula_schema)
     if !(coef_names isa Vector)
@@ -198,9 +205,6 @@ function nlreg(@nospecialize(df),
 
     # construct fixed effects object and solver
     fes = FixedEffect[_subset(fe, esample) for fe in fes]
-
-    basecoef = trues(size(Xexo,2)) # basecoef contains the information of the dropping of the regressors.
-    # esample contains the information of the dropping of the observations.
 
     # pre separation detection check for collinearity
     Xexo, basecoef = detect_linear_dependency_among_X!(Xexo, basecoef; coefnames=coef_names)
@@ -241,8 +245,6 @@ function nlreg(@nospecialize(df),
     feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
 
     # make one copy after deleting NAs + dropping singletons + detecting separations (fe + relu)
-    oldy = deepcopy(y)
-    oldX = deepcopy(Xexo)
     nobs = sum(esample)
     (nobs > 0) || throw("sample is empty")
 
@@ -263,7 +265,9 @@ function nlreg(@nospecialize(df),
         beta = 0.1 .* ones(Float64, coeflength)
     end
 
-    Xexo = GLFixedEffectModels.getcols(oldX, basecoef) # get Xexo from oldX and basecoef
+    Xexo = oldX[esample,:]
+    Xexo = GLFixedEffectModels.getcols(Xexo, basecoef) # get Xexo from oldX and basecoef and esample
+
     eta = Xexo * beta
     mu = GLM.linkinv.(Ref(link),eta)
     wt = ones(Float64, nobs, 1)
@@ -443,6 +447,7 @@ function nlreg(@nospecialize(df),
         end
     end
     if save_fe
+        oldX = oldX[esample,:]
         oldX = getcols(oldX, basecoef)
         # update FixedEffectSolver
         weights = Weights(Ones{Float64}(sum(esample)))
