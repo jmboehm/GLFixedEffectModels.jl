@@ -58,6 +58,8 @@ function nlreg(@nospecialize(df),
     separation::Vector{Symbol} = Symbol[], # method to detect and/or deal with separation
     separation_mu_lbound::Real = -Inf,
     separation_mu_ubound::Real = Inf,
+    separation_ReLU_tol::Real = 1e-3,
+    separation_ReLU_maxiter::Integer = 100,
     @nospecialize(vcovformula::Union{Symbol, Expr, Nothing} = nothing),
     @nospecialize(subsetformula::Union{Symbol, Expr, Nothing} = nothing),
     verbose::Bool = false # Print output on each iteration.
@@ -219,7 +221,11 @@ function nlreg(@nospecialize(df),
         end
         if :ReLU ∈ separation
             esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes; 
-                double_precision = double_precision, method = method, verbose = verbose)
+                double_precision = double_precision, 
+                dtol = center_tol, dmaxiter = maxiter,
+                rtol = separation_ReLU_tol, rmaxiter = separation_ReLU_maxiter,
+                method = method, verbose = verbose, 
+                )
         end
     elseif link isa Union{ProbitLink, LogitLink}
         @assert all(0 .<= y .<= 1)
@@ -229,9 +235,17 @@ function nlreg(@nospecialize(df),
         end
         if :ReLU ∈ separation
             esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes;
-                double_precision = double_precision, method = method, verbose = verbose)
+                double_precision = double_precision, 
+                dtol = center_tol, dmaxiter = maxiter,
+                rtol = separation_ReLU_tol, rmaxiter = separation_ReLU_maxiter,
+                method = method, verbose = verbose, 
+                )
             esample, y, Xexo, fes = detect_sep_relu!(esample, 1 .- y[:], Xexo, fes;
-                double_precision = double_precision, method = method, verbose = verbose)
+                double_precision = double_precision, 
+                dtol = center_tol, dmaxiter = maxiter,
+                rtol = separation_ReLU_tol, rmaxiter = separation_ReLU_maxiter,
+                method = method, verbose = verbose, 
+                )
             y = 1 .- y
         end
     else
