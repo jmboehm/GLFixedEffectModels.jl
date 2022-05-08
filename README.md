@@ -66,9 +66,11 @@ The optional arguments are:
 * `rho_tol::Real` : Tolerance level for the stephalving in the maximization routine.
 * `step_tol::Real` : Tolerance level that accounts for rounding errors inside the stephalving routine
 * `center_tol::Real` : Tolerance level for the stopping condition of the centering algorithm. Default to 1e-8 if `double_precision = true`, 1e-6 otherwise.
-* `separation::Symbol = :ignore` : Method to detect/deal with [separation](https://github.com/sergiocorreia/ppmlhdfe/blob/master/guides/separation_primer.md). Currently supported values are `:none`, `:ignore` and `:mu`. `:none` checks for observations that are outside `[separation_mu_lbound,separation_mu_ubound]`, and gives a warning, but does not do anything. `:ignore` does not check (and may therefore be slightly faster than the other options). `:mu` truncates mu at `separation_mu_lbound` or `separation_mu_ubound`. 
+* `separation::Vector{Symbol} = Symbol[]` : Method to detect/deal with [separation](https://github.com/sergiocorreia/ppmlhdfe/blob/master/guides/separation_primer.md). Supported elements are `:mu`, `:fe`, `:ReLU`, and in the future, `:simplex`. `:mu` truncates mu at `separation_mu_lbound` or `separation_mu_ubound`. `:fe` finds categories of the fixed effects that only exist when y is at the separation point. `ReLU` detects separation using ReLU, with the maxiter being `separation_ReLU_maxiter` and tolerance being `separation_ReLU_tol`.
 * `separation_mu_lbound::Real = -Inf` : Lower bound for the separation detection/correction heuristic (on mu). What a reasonable value would be depends on the model that you're trying to fit.
 * `separation_mu_ubound::Real = Inf` : Upper bound for the separation detection/correction heuristic.
+* `separation_ReLU_tol::Real = 1e-4` : Tolerance level for the ReLU algorithm.
+* `separation_ReLU_maxiter::Integer = 1000` : Maximal number of iterations for the ReLU algorithm.
 * `verbose::Bool = false` : If `true`, prints output on each iteration.
 
 The function returns a `GLFixedEffectModel` object which supports the `StatsBase.RegressionModel` abstraction. It can be displayed in table form by using [RegressionTables.jl](https://github.com/jmboehm/RegressionTables.jl).
