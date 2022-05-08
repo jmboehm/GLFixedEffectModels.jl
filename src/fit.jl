@@ -306,37 +306,34 @@ function nlreg(@nospecialize(df),
         # Compute IWLS weights and dependent variable
         mymueta = GLM.mueta.(Ref(link),eta)
 
-        # Check for separation, if we do
-        if isempty(separation) # if separation method is specified
-            # use the bounds to detect 
-            min_mueta = minimum(mymueta)
-            max_mueta = maximum(mymueta)
-            min_mu = minimum(mu)
-            max_mu = maximum(mu)
-            if (min_mueta < separation_mu_lbound) | (max_mueta > separation_mu_ubound) | (min_mu < separation_mu_lbound) | (max_mu > separation_mu_ubound)
-                problematic = ((mymueta .< separation_mu_lbound) .| (mymueta .> separation_mu_ubound) .| (mu .< separation_mu_lbound) .| (mu .> separation_mu_ubound))
-                @warn "$(sum(problematic)) observation(s) exceed the lower or upper bounds. Likely reason is statistical separation."
-                # deal with it
-                if :mu ∈ separation
-                    mymueta[mymueta .< separation_mu_lbound] .= separation_mu_lbound 
-                    mymueta[mymueta .> separation_mu_ubound] .= separation_mu_ubound
-                    mu[mu .< separation_mu_lbound] .= separation_mu_lbound 
-                    mu[mu .> separation_mu_ubound] .= separation_mu_ubound
-                end
-                # The following would remove the observations that are outside of the bounds, and restarts the estimation.
-                # Inefficient.
-                # if separation == :restart
-                #     df_new = df[setdiff(1:size(df,1),indices),:]
-                #     println("Separation detected. Restarting...")
-                #     return nlreg(df_new,formula_origin,distribution,link,vcov,
-                #         weights=nothing,subset=subset,start=beta,maxiter_center=maxiter_center, maxiter=maxiter, 
-                #         contrasts=contrasts,dof_add=dof_add,save=save,
-                #         method=method,drop_singletons=drop_singletons,double_precision=double_precision,
-                #         dev_tol=dev_tol, rho_tol=rho_tol, step_tol=step_tol, center_tol=center_tol, 
-                #         vcovformula=vcovformula,subsetformula=subsetformula,verbose=verbose)
-                # end
+        # Check for separation
+        # use the bounds to detect 
+        min_mueta = minimum(mymueta)
+        max_mueta = maximum(mymueta)
+        min_mu = minimum(mu)
+        max_mu = maximum(mu)
+        if (min_mueta < separation_mu_lbound) | (max_mueta > separation_mu_ubound) | (min_mu < separation_mu_lbound) | (max_mu > separation_mu_ubound)
+            problematic = ((mymueta .< separation_mu_lbound) .| (mymueta .> separation_mu_ubound) .| (mu .< separation_mu_lbound) .| (mu .> separation_mu_ubound))
+            @warn "$(sum(problematic)) observation(s) exceed the lower or upper bounds. Likely reason is statistical separation."
+            # deal with it
+            if :mu ∈ separation
+                mymueta[mymueta .< separation_mu_lbound] .= separation_mu_lbound 
+                mymueta[mymueta .> separation_mu_ubound] .= separation_mu_ubound
+                mu[mu .< separation_mu_lbound] .= separation_mu_lbound 
+                mu[mu .> separation_mu_ubound] .= separation_mu_ubound
             end
-
+            # The following would remove the observations that are outside of the bounds, and restarts the estimation.
+            # Inefficient.
+            # if separation == :restart
+            #     df_new = df[setdiff(1:size(df,1),indices),:]
+            #     println("Separation detected. Restarting...")
+            #     return nlreg(df_new,formula_origin,distribution,link,vcov,
+            #         weights=nothing,subset=subset,start=beta,maxiter_center=maxiter_center, maxiter=maxiter, 
+            #         contrasts=contrasts,dof_add=dof_add,save=save,
+            #         method=method,drop_singletons=drop_singletons,double_precision=double_precision,
+            #         dev_tol=dev_tol, rho_tol=rho_tol, step_tol=step_tol, center_tol=center_tol, 
+            #         vcovformula=vcovformula,subsetformula=subsetformula,verbose=verbose)
+            # end
         end
 
         wtildesq = mymueta.*mymueta ./  GLM.glmvar.(Ref(distribution),mu)
