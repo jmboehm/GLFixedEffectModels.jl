@@ -1,6 +1,6 @@
 using DataFrames
-include("../src/GLFixedEffectModels.jl")
-using .GLFixedEffectModels
+# include("../src/GLFixedEffectModels.jl")
+using GLFixedEffectModels
 using Test
 using Downloads, CSV
 
