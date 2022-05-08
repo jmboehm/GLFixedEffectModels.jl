@@ -54,7 +54,7 @@ res1 = nlreg(df, @formula(y ~ x1 + fe(i) + fe(j)), Poisson(), LogLink() ; separa
 
 url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/csv/fe3.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
-res1 = nlreg(df, @formula(y ~ x1 + x2 + fe(i) + fe(j)), Poisson(), LogLink() ; separation = [:ReLU])
+res1 = nlreg(df, @formula(y ~ x1 + fe(i) + fe(j)), Poisson(), LogLink() ; separation = [:ReLU])
 
 url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/01.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
