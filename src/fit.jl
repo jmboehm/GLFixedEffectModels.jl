@@ -230,13 +230,13 @@ function nlreg(@nospecialize(df),
                 )
         end
     elseif link isa Union{ProbitLink, LogitLink}
-        @warn "ReLU separation detection for ProbitLink/LogitLink is expermental, please interpret with caution."
         @assert all(0 .<= y .<= 1) "Dependent variable is not in the domain of the link function."
         if :fe ∈ separation
             esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 0)
             esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 1)
         end
         if :ReLU ∈ separation
+            @warn "ReLU separation detection for ProbitLink/LogitLink is expermental, please interpret with caution."
             esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes;
                 double_precision = double_precision, 
                 dtol = center_tol, dmaxiter = maxiter,
