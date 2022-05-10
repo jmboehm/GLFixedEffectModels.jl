@@ -20,6 +20,8 @@ Estimate a generalized linear model with high dimensional categorical variables
 * `separation::Symbol = :none` : method to detect/deal with separation. Currently supported values are `:none`, `:ignore` and `:mu`. See readme for details.
 * `separation_mu_lbound::Real = -Inf` : Lower bound for the Clarkson-Jennrich separation detection heuristic.
 * `separation_mu_ubound::Real = Inf` : Upper bound for the Clarkson-Jennrich separation detection heuristic.
+* `separation_ReLU_tol::Real = 1e-4` : Tolerance level for the ReLU algorithm.
+* `separation_ReLU_maxiter::Integer = 1000` : Maximal number of iterations for the ReLU algorithm.
 
 ### Examples
 ```julia
@@ -58,7 +60,7 @@ function nlreg(@nospecialize(df),
     separation::Vector{Symbol} = Symbol[], # method to detect and/or deal with separation
     separation_mu_lbound::Real = -Inf,
     separation_mu_ubound::Real = Inf,
-    separation_ReLU_tol::Real = 1e-3,
+    separation_ReLU_tol::Real = 1e-4,
     separation_ReLU_maxiter::Integer = 100,
     @nospecialize(vcovformula::Union{Symbol, Expr, Nothing} = nothing),
     @nospecialize(subsetformula::Union{Symbol, Expr, Nothing} = nothing),
@@ -228,7 +230,8 @@ function nlreg(@nospecialize(df),
                 )
         end
     elseif link isa Union{ProbitLink, LogitLink}
-        @assert all(0 .<= y .<= 1)
+        @warn "ReLU separation detection for ProbitLink/LogitLink is expermental, please interpret with caution."
+        @assert all(0 .<= y .<= 1) "Dependent variable is not in the domain of the link function."
         if :fe ∈ separation
             esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 0)
             esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 1)
@@ -249,7 +252,7 @@ function nlreg(@nospecialize(df),
             y = 1 .- y
         end
     else
-        @warn "Unrecognized link. Skip separation detection."
+        @warn "Link function type $(typeof(link)) not support for ReLU separation detection. Skip separation detection."
     end
     
     # post separation detection check for collinearity

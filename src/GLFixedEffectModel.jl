@@ -288,5 +288,5 @@ function StatsModels.apply_schema(t::FormulaTerm, schema::StatsModels.Schema, Mo
         push!(schema.already, InterceptTerm{true}())
     end
     FormulaTerm(apply_schema(t.lhs, schema.schema, StatisticalModel),
-                StatsModels.collect_matrix_terms(apply_schema(t.rhs, schema.schema, StatisticalModel)))
+                StatsModels.collect_matrix_terms(apply_schema(t.rhs, schema, StatisticalModel)))
 end
