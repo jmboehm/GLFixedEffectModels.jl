@@ -142,14 +142,14 @@ df_sep = DataFrame(y = [[0.0, 0.0, 0.0, 1.0, 1.0, 1.0];rand(rng,[0.0,1.0],500)],
 m = GLFixedEffectModels.@formula y ~ x + GLFixedEffectModels.fe(x1)
 try
     # this should fail
-    x = GLFixedEffectModels.nlreg(df_sep, m, Binomial(), LogitLink() , start = [0.1], separation = :none, separation_mu_lbound=1e-10, separation_mu_ubound=1.0-1e-10, verbose=true, rho_tol=1e-12 )
+    x = GLFixedEffectModels.nlreg(df_sep, m, Binomial(), LogitLink() , start = [0.1], separation = Symbol[], separation_mu_lbound=1e-10, separation_mu_ubound=1.0-1e-10, verbose=true, rho_tol=1e-12 )
 catch ex
     @test !isnothing(ex)
 end
 # with cutoff on mu, it converges
 try
     # this should pass
-    x = GLFixedEffectModels.nlreg(df_sep, m, Binomial(), LogitLink() , start = [0.1], separation = :mu, separation_mu_lbound=1e-10, separation_mu_ubound=1.0-1e-10, verbose=true, rho_tol=1e-12 )
+    x = GLFixedEffectModels.nlreg(df_sep, m, Binomial(), LogitLink() , start = [0.1], separation = [:mu], separation_mu_lbound=1e-10, separation_mu_ubound=1.0-1e-10, verbose=true, rho_tol=1e-12 )
     @test x.coef ≈ [-0.0005504145168443688] atol = 1e-4
 catch ex
     @test isnothing(ex)

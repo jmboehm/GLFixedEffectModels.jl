@@ -20,6 +20,8 @@ Estimate a generalized linear model with high dimensional categorical variables
 * `separation::Symbol = :none` : method to detect/deal with separation. Currently supported values are `:none`, `:ignore` and `:mu`. See readme for details.
 * `separation_mu_lbound::Real = -Inf` : Lower bound for the Clarkson-Jennrich separation detection heuristic.
 * `separation_mu_ubound::Real = Inf` : Upper bound for the Clarkson-Jennrich separation detection heuristic.
+* `separation_ReLU_tol::Real = 1e-4` : Tolerance level for the ReLU algorithm.
+* `separation_ReLU_maxiter::Integer = 1000` : Maximal number of iterations for the ReLU algorithm.
 
 ### Examples
 ```julia
@@ -55,9 +57,11 @@ function nlreg(@nospecialize(df),
     rho_tol::Real = 1.0e-8, # tolerance level for the stephalving in the maximization routine.
     step_tol::Real = 1.0e-8, # tolerance level that accounts for rounding errors inside the stephalving routine
     center_tol::Real = double_precision ? 1e-8 : 1e-6, # tolerance level for the stopping condition of the centering algorithm.
-    separation::Symbol = :ignore, # method to detect and/or deal with separation
+    separation::Vector{Symbol} = Symbol[], # method to detect and/or deal with separation
     separation_mu_lbound::Real = -Inf,
     separation_mu_ubound::Real = Inf,
+    separation_ReLU_tol::Real = 1e-4,
+    separation_ReLU_maxiter::Integer = 100,
     @nospecialize(vcovformula::Union{Symbol, Expr, Nothing} = nothing),
     @nospecialize(subsetformula::Union{Symbol, Expr, Nothing} = nothing),
     verbose::Bool = false # Print output on each iteration.
@@ -135,15 +139,17 @@ function nlreg(@nospecialize(df),
     end
     if has_fes
         if drop_singletons
+            before_n = sum(esample)
             for fe in fes
                 drop_singletons!(esample, fe)
             end
+            after_n = sum(esample)
+            dropped_n = before_n - after_n
+            if dropped_n > 0
+                @info "$(dropped_n) observations detected as singletons. Dropping them ..."
+            end
         end
     end
-    save_fe = (:fe ∈ save) & has_fes 
-
-    nobs = sum(esample)
-    (nobs > 0) || throw("sample is empty")
 
     has_intercept = hasintercept(formula)
     has_fe_intercept = false
@@ -153,8 +159,7 @@ function nlreg(@nospecialize(df),
         end
     end
 
-    # Compute data for std errors
-    vcov_method = Vcov.materialize(view(df, esample, :), vcov)
+    save_fe = (:fe ∈ save) & has_fes 
 
     ##############################################################################
     ##
@@ -162,17 +167,24 @@ function nlreg(@nospecialize(df),
     ##
     ##############################################################################
     exo_vars = unique(StatsModels.termvars(formula))
-    subdf = Tables.columntable((; (x => disallowmissing(view(df[!, x], esample)) for x in exo_vars)...))
+    subdf = Tables.columntable((; (x => disallowmissing(view(df[!, x], :)) for x in exo_vars)...))
     formula_schema = apply_schema(formula, schema(formula, subdf, contrasts), GLFixedEffectModel, has_fe_intercept)
 
     # Obtain y
     # for a Vector{Float64}, conver(Vector{Float64}, y) aliases y
     y = convert(Vector{Float64}, response(formula_schema, subdf))
+    oldy = deepcopy(y)
+    y = y[esample]
     all(isfinite, y) || throw("Some observations for the dependent variable are infinite")
 
     # Obtain X
     Xexo = convert(Matrix{Float64}, modelmatrix(formula_schema, subdf))
+    oldX = deepcopy(Xexo)
+    Xexo = Xexo[esample,:]
     all(isfinite, Xexo) || throw("Some observations for the exogeneous variables are infinite")
+
+    basecoef = trues(size(Xexo,2)) # basecoef contains the information of the dropping of the regressors.
+    # while esample contains the information of the dropping of the observations.
 
     response_name, coef_names = coefnames(formula_schema)
     if !(coef_names isa Vector)
@@ -187,29 +199,91 @@ function nlreg(@nospecialize(df),
     # end
     # all(isfinite, values(weights)) || throw("Weights are not finite")
 
-    # compute tss now before potentially demeaning y
-    tss_total = tss(y, has_intercept | has_fe_intercept, Weights(Ones{Float64}(sum(esample))))
-
-    # used to compute tss even without save_fe
-    if save_fe
-        oldy = deepcopy(y)
-        oldX = deepcopy(Xexo)
-    end
+    ########################################################################
+    ##
+    ## Presolve:
+    ## Step 1. Check Multicollinearity among X.
+    ## Step 2. Check Separation
+    ##
+    ########################################################################
 
     # construct fixed effects object and solver
     fes = FixedEffect[_subset(fe, esample) for fe in fes]
+
+    # pre separation detection check for collinearity
+    Xexo, basecoef = detect_linear_dependency_among_X!(Xexo, basecoef; coefnames=coef_names)
+
+    if :simplex ∈ separation
+        @warn "simplex not implemented, will ignore."
+    end
+    
+    if link isa LogLink
+        if :fe ∈ separation
+            esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 0)
+        end
+        if :ReLU ∈ separation
+            esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes; 
+                double_precision = double_precision, 
+                dtol = center_tol, dmaxiter = maxiter,
+                rtol = separation_ReLU_tol, rmaxiter = separation_ReLU_maxiter,
+                method = method, verbose = verbose, 
+                )
+        end
+    elseif link isa Union{ProbitLink, LogitLink}
+        @assert all(0 .<= y .<= 1) "Dependent variable is not in the domain of the link function."
+        if :fe ∈ separation
+            esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 0)
+            esample, y, Xexo, fes = detect_sep_fe!(esample, y, Xexo, fes; sep_at = 1)
+        end
+        if :ReLU ∈ separation
+            @warn "ReLU separation detection for ProbitLink/LogitLink is expermental, please interpret with caution."
+            esample, y, Xexo, fes = detect_sep_relu!(esample, y, Xexo, fes;
+                double_precision = double_precision, 
+                dtol = center_tol, dmaxiter = maxiter,
+                rtol = separation_ReLU_tol, rmaxiter = separation_ReLU_maxiter,
+                method = method, verbose = verbose, 
+                )
+            esample, y, Xexo, fes = detect_sep_relu!(esample, 1 .- y[:], Xexo, fes;
+                double_precision = double_precision, 
+                dtol = center_tol, dmaxiter = maxiter,
+                rtol = separation_ReLU_tol, rmaxiter = separation_ReLU_maxiter,
+                method = method, verbose = verbose, 
+                )
+            y = 1 .- y
+        end
+    else
+        @warn "Link function type $(typeof(link)) not support for ReLU separation detection. Skip separation detection."
+    end
+    
+    # post separation detection check for collinearity
+    Xexo, basecoef = detect_linear_dependency_among_X!(Xexo, basecoef; coefnames=coef_names)
+
     weights = Weights(Ones{Float64}(sum(esample)))
     feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
 
-    # some constants
-    coeflength = size(Xexo,2)
+    # make one copy after deleting NAs + dropping singletons + detecting separations (fe + relu)
+    nobs = sum(esample)
+    (nobs > 0) || throw("sample is empty")
 
-    if start != nothing
+    # compute tss now before potentially demeaning y
+    tss_total = tss(y, has_intercept | has_fe_intercept, Weights(Ones{Float64}(sum(esample))))
+
+    # Compute data for std errors
+    vcov_method = Vcov.materialize(view(df, esample, :), vcov)
+
+    # mark this as the start of a rerun when collinearity among X and fe is detected, rerun from here.
+    @label rerun
+
+    coeflength = sum(basecoef)
+    if start !== nothing
         (length(start) == coeflength) || error("Invalid length of `start` argument.")
         beta = start
     else
         beta = 0.1 .* ones(Float64, coeflength)
     end
+
+    Xexo = oldX[esample,:]
+    Xexo = GLFixedEffectModels.getcols(Xexo, basecoef) # get Xexo from oldX and basecoef and esample
 
     eta = Xexo * beta
     mu = GLM.linkinv.(Ref(link),eta)
@@ -217,11 +291,9 @@ function nlreg(@nospecialize(df),
     dev = sum(devresid.(Ref(distribution), y, mu))
     nulldev = sum(devresid.(Ref(distribution), mean(y), mu))
 
-    X = Xexo
     Xhat = Xexo
     crossx = Matrix{Float64}(undef, nobs, 0)
     residuals = y # just for initialization
-    basecoef = BitArray{size(X,2)}
 
     # Stuff that we need in outside scope
     emp = Array{Float64,2}(undef,2,2)
@@ -237,37 +309,34 @@ function nlreg(@nospecialize(df),
         # Compute IWLS weights and dependent variable
         mymueta = GLM.mueta.(Ref(link),eta)
 
-        # Check for separation, if we do
-        if (separation != :ignore)
-            # use the bounds to detect 
-            min_mueta = minimum(mymueta)
-            max_mueta = maximum(mymueta)
-            min_mu = minimum(mu)
-            max_mu = maximum(mu)
-            if (min_mueta < separation_mu_lbound) | (max_mueta > separation_mu_ubound) | (min_mu < separation_mu_lbound) | (max_mu > separation_mu_ubound)
-                problematic = ((mymueta .< separation_mu_lbound) .| (mymueta .> separation_mu_ubound) .| (mu .< separation_mu_lbound) .| (mu .> separation_mu_ubound))
-                @warn "$(sum(problematic)) observation(s) exceed the lower or upper bounds. Likely reason is statistical separation."
-                # deal with it
-                if separation == :mu
-                    mymueta[mymueta .< separation_mu_lbound] .= separation_mu_lbound 
-                    mymueta[mymueta .> separation_mu_ubound] .= separation_mu_ubound
-                    mu[mu .< separation_mu_lbound] .= separation_mu_lbound 
-                    mu[mu .> separation_mu_ubound] .= separation_mu_ubound
-                end
-                # The following would remove the observations that are outside of the bounds, and restarts the estimation.
-                # Inefficient.
-                # if separation == :restart
-                #     df_new = df[setdiff(1:size(df,1),indices),:]
-                #     println("Separation detected. Restarting...")
-                #     return nlreg(df_new,formula_origin,distribution,link,vcov,
-                #         weights=nothing,subset=subset,start=beta,maxiter_center=maxiter_center, maxiter=maxiter, 
-                #         contrasts=contrasts,dof_add=dof_add,save=save,
-                #         method=method,drop_singletons=drop_singletons,double_precision=double_precision,
-                #         dev_tol=dev_tol, rho_tol=rho_tol, step_tol=step_tol, center_tol=center_tol, 
-                #         vcovformula=vcovformula,subsetformula=subsetformula,verbose=verbose)
-                # end
+        # Check for separation
+        # use the bounds to detect 
+        min_mueta = minimum(mymueta)
+        max_mueta = maximum(mymueta)
+        min_mu = minimum(mu)
+        max_mu = maximum(mu)
+        if (min_mueta < separation_mu_lbound) | (max_mueta > separation_mu_ubound) | (min_mu < separation_mu_lbound) | (max_mu > separation_mu_ubound)
+            problematic = ((mymueta .< separation_mu_lbound) .| (mymueta .> separation_mu_ubound) .| (mu .< separation_mu_lbound) .| (mu .> separation_mu_ubound))
+            @warn "$(sum(problematic)) observation(s) exceed the lower or upper bounds. Likely reason is statistical separation."
+            # deal with it
+            if :mu ∈ separation
+                mymueta[mymueta .< separation_mu_lbound] .= separation_mu_lbound 
+                mymueta[mymueta .> separation_mu_ubound] .= separation_mu_ubound
+                mu[mu .< separation_mu_lbound] .= separation_mu_lbound 
+                mu[mu .> separation_mu_ubound] .= separation_mu_ubound
             end
-
+            # The following would remove the observations that are outside of the bounds, and restarts the estimation.
+            # Inefficient.
+            # if separation == :restart
+            #     df_new = df[setdiff(1:size(df,1),indices),:]
+            #     println("Separation detected. Restarting...")
+            #     return nlreg(df_new,formula_origin,distribution,link,vcov,
+            #         weights=nothing,subset=subset,start=beta,maxiter_center=maxiter_center, maxiter=maxiter, 
+            #         contrasts=contrasts,dof_add=dof_add,save=save,
+            #         method=method,drop_singletons=drop_singletons,double_precision=double_precision,
+            #         dev_tol=dev_tol, rho_tol=rho_tol, step_tol=step_tol, center_tol=center_tol, 
+            #         vcovformula=vcovformula,subsetformula=subsetformula,verbose=verbose)
+            # end
         end
 
         wtildesq = mymueta.*mymueta ./  GLM.glmvar.(Ref(distribution),mu)
@@ -305,9 +374,20 @@ function nlreg(@nospecialize(df),
         end
 
         basecolXexo = GLFixedEffectModels.basecol(Xdemean)
+        if all(basecolXexo)
+        else
+            remaining_cols = findall(basecoef)
+            regressor_ind_to_be_dropped = remaining_cols[.~basecolXexo]
+            basecoef[regressor_ind_to_be_dropped] .= 0 # update basecoef
+
+            # throw info
+            @info "Multicollinearity detected among columns of X and FixedEffects. Dropping regressors: $(join(coef_names[regressor_ind_to_be_dropped]," "))"
+
+            @goto rerun
+        end
+
         Xexo2 = GLFixedEffectModels.getcols(Xdemean, basecolXexo)
         Xhat = Xexo2
-        basecoef = basecolXexo
         crossx = cholesky!(Symmetric(Xhat' * Xhat))
 
         beta_update = crossx \ (Xhat' * nudemean)
@@ -381,6 +461,7 @@ function nlreg(@nospecialize(df),
         end
     end
     if save_fe
+        oldX = oldX[esample,:]
         oldX = getcols(oldX, basecoef)
         # update FixedEffectSolver
         weights = Weights(Ones{Float64}(sum(esample)))
@@ -431,7 +512,7 @@ function nlreg(@nospecialize(df),
             end
         end
     end
-    _n_coefs = size(X, 2) + dof_absorb + dof_add
+    _n_coefs = sum(basecoef) + dof_absorb + dof_add
     dof_residual_ = max(1, nobs - _n_coefs)
 
     nclusters = nothing
