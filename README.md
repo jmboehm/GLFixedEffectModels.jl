@@ -8,7 +8,7 @@
 ![Lifecycle](https://img.shields.io/badge/lifecycle-dormant-blue.svg) -->
 ![example branch parameter](https://github.com/jmboehm/GLFixedEffectModels.jl/actions/workflows/ci.yml/badge.svg?branch=master) [![codecov.io](http://codecov.io/github/jmboehm/GLFixedEffectModels.jl/coverage.svg?branch=master)](http://codecov.io/github/jmboehm/GLFixedEffectModels.jl?branch=master) [![DOI](https://zenodo.org/badge/164128032.svg)](https://zenodo.org/badge/latestdoi/164128032)
 
-This package estimates generalized linear models with high dimensional categorical variables. It builds on Matthieu Gomez's [FixedEffects.jl](https://github.com/FixedEffects/FixedEffects.jl) and Amrei Stammann's [Alpaca](https://github.com/amrei-stammann/alpaca).
+This package estimates generalized linear models with high dimensional categorical variables. It builds on Matthieu Gomez's [FixedEffects.jl](https://github.com/FixedEffects/FixedEffects.jl), Amrei Stammann's [Alpaca](https://github.com/amrei-stammann/alpaca), and Sergio Correia's [ppmlhdfe](https://github.com/sergiocorreia/ppmlhdfe).
 
 ## Installation
 
@@ -91,7 +91,6 @@ The package experimentally supports bias correction methods for the following mo
 
 - Better default starting values
 - Weights
-- More options of dealing with separation
 - Better StatsBase interface & prediction
 - Better benchmarking
 
@@ -105,6 +104,8 @@ The package experimentally supports bias correction methods for the following mo
 - [RegressionTables.jl](https://github.com/jmboehm/RegressionTables.jl) supports pretty printing of results from this package.
 
 ## References
+
+Correia, S. and Guimarães, P, and Zylkin, T., 2019. Verifying the existence of maximum likelihood estimates for generalized linear models. Working paper, https://arxiv.org/abs/1903.01633
 
 Fernández-Val, I. and Weidner, M., 2016. Individual and time effects in nonlinear panel models with large N, T. Journal of Econometrics, 192(1), pp.291-312.
 
