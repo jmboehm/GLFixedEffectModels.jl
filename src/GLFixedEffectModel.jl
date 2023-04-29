@@ -41,34 +41,34 @@ FixedEffectModels.has_fe(x::GLFixedEffectModel) = FixedEffectModels.has_fe(x.for
 
 # Check API at  https://github.com/JuliaStats/StatsBase.jl/blob/65351de819ca64941cb81c047e4b77157446f7c5/src/statmodels.jl
 # fields
-StatsBase.coef(x::GLFixedEffectModel) = x.coef
-StatsBase.coefnames(x::GLFixedEffectModel) = x.coefnames
-StatsBase.responsename(x::GLFixedEffectModel) = string(x.yname)
-StatsBase.vcov(x::GLFixedEffectModel) = x.vcov
-StatsBase.nobs(x::GLFixedEffectModel) = x.nobs
-StatsBase.dof_residual(x::GLFixedEffectModel) = x.dof_residual
-StatsBase.islinear(x::GLFixedEffectModel) = (x.link == IdentityLink() ? true : false)
-StatsBase.deviance(x::GLFixedEffectModel) = x.deviance
-StatsBase.nulldeviance(x::GLFixedEffectModel) = x.nulldeviance
+StatsAPI.coef(x::GLFixedEffectModel) = x.coef
+StatsAPI.coefnames(x::GLFixedEffectModel) = x.coefnames
+StatsAPI.responsename(x::GLFixedEffectModel) = string(x.yname)
+StatsAPI.vcov(x::GLFixedEffectModel) = x.vcov
+StatsAPI.nobs(x::GLFixedEffectModel) = x.nobs
+StatsAPI.dof_residual(x::GLFixedEffectModel) = x.dof_residual
+StatsAPI.islinear(x::GLFixedEffectModel) = (x.link == IdentityLink() ? true : false)
+StatsAPI.deviance(x::GLFixedEffectModel) = x.deviance
+StatsAPI.nulldeviance(x::GLFixedEffectModel) = x.nulldeviance
 
-function StatsBase.confint(x::GLFixedEffectModel, level::Real = 0.95)
+function StatsAPI.confint(x::GLFixedEffectModel, level::Real = 0.95)
     scale = quantile(Normal(), 1. - (1. - level)/2.)
     se = stderror(x)
     hcat(x.coef -  scale * se, x.coef + scale * se)
 end
-StatsBase.loglikelihood(x::GLFixedEffectModel) = error("loglikelihood is not yet implemented for $(typeof(x)).")
-StatsBase.nullloglikelihood(x::GLFixedEffectModel) = error("nullloglikelihood is not yet implemented for $(typeof(x)).")
+StatsAPI.loglikelihood(x::GLFixedEffectModel) = error("loglikelihood is not yet implemented for $(typeof(x)).")
+StatsAPI.nullloglikelihood(x::GLFixedEffectModel) = error("nullloglikelihood is not yet implemented for $(typeof(x)).")
 # TODO: check whether this is equal to x.gradient
-StatsBase.score(x::GLFixedEffectModel) = error("score is not yet implemented for $(typeof(x)).")
+StatsAPI.score(x::GLFixedEffectModel) = error("score is not yet implemented for $(typeof(x)).")
 
-function StatsBase.predict(x::GLFixedEffectModel)
+function StatsAPI.predict(x::GLFixedEffectModel)
     ("mu" ∉ names(x.augmentdf)) && error("Predicted response `mu` has not been saved. Run nlreg with :mu included in the keyword vector `save`.")
     x.augmentdf.mu
 end
-function StatsBase.predict(x::GLFixedEffectModel, df::AbstractDataFrame)
+function StatsAPI.predict(x::GLFixedEffectModel, df::AbstractDataFrame)
     error("predict is not yet implemented for $(typeof(x)).")
 end
-function StatsBase.residuals(x::GLFixedEffectModel)
+function StatsAPI.residuals(x::GLFixedEffectModel)
     ("residuals" ∉ names(x.augmentdf)) && error("Residuals have not been saved. Run nlreg with :fe included in the keyword vector `save`.")
     x.augmentdf.residuals
 end
@@ -152,7 +152,7 @@ function Base.show(io::IO, x::GLFixedEffectModel)
     show(io, coeftable(x))
 end
 
-function StatsBase.coeftable(x::GLFixedEffectModel)
+function StatsAPI.coeftable(x::GLFixedEffectModel)
     ctitle = title(x)
     ctop = top(x)
     cc = coef(x)
