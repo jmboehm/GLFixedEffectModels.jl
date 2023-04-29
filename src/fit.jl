@@ -93,7 +93,7 @@ function nlreg(@nospecialize(df),
     if  !omitsintercept(formula) & !hasintercept(formula)
         formula = FormulaTerm(formula.lhs, InterceptTerm{true}() + formula.rhs)
     end
-    formula, formula_endo, formula_iv = parse_iv(formula)
+    formula, formula_endo, formula_iv = FixedEffectModels.parse_iv(formula)
     has_iv = formula_iv != nothing
     has_weights = weights != nothing
     if has_iv
@@ -122,26 +122,25 @@ function nlreg(@nospecialize(df),
 
     # TODO speedup: this takes 4.8k
     esample = completecases(df, all_vars)
-    if has_weights
-        esample .&= BitArray(!ismissing(x) & (x > 0) for x in df[!, weights])
-    end
-    esample .&= Vcov.completecases(df, vcov)
+    # if has_weights
+    #     esample .&= BitArray(!ismissing(x) & (x > 0) for x in df[!, weights])
+    # end
     if subset != nothing
         if length(subset) != size(df, 1)
             throw("df has $(size(df, 1)) rows but the subset vector has $(length(subset)) elements")
         end
         esample .&= BitArray(!ismissing(x) && x for x in subset)
     end
-    fes, ids, formula = parse_fixedeffect(df, formula)
+    esample .&= Vcov.completecases(df, vcov)
+
+    fes, ids, fekeys, formula = FixedEffectModels.parse_fixedeffect(df, formula)
     has_fes = !isempty(fes)
-    if !has_fes
-        error("No fixed effects detected, exiting. Please use GLM.jl for GLM's without fixed effects.")
-    end
+
     if has_fes
         if drop_singletons
             before_n = sum(esample)
             for fe in fes
-                drop_singletons!(esample, fe)
+                FixedEffectModels.drop_singletons!(esample, fe)
             end
             after_n = sum(esample)
             dropped_n = before_n - after_n
@@ -167,20 +166,20 @@ function nlreg(@nospecialize(df),
     ##
     ##############################################################################
     exo_vars = unique(StatsModels.termvars(formula))
-    subdf = Tables.columntable((; (x => disallowmissing(view(df[!, x], :)) for x in exo_vars)...))
+    subdf = Tables.columntable((; (x => disallowmissing(view(df[!, x], esample)) for x in exo_vars)...))
     formula_schema = apply_schema(formula, schema(formula, subdf, contrasts), GLFixedEffectModel, has_fe_intercept)
 
     # Obtain y
     # for a Vector{Float64}, conver(Vector{Float64}, y) aliases y
     y = convert(Vector{Float64}, response(formula_schema, subdf))
     oldy = deepcopy(y)
-    y = y[esample]
+    #y = y[esample]
     all(isfinite, y) || throw("Some observations for the dependent variable are infinite")
 
     # Obtain X
     Xexo = convert(Matrix{Float64}, modelmatrix(formula_schema, subdf))
     oldX = deepcopy(Xexo)
-    Xexo = Xexo[esample,:]
+    #Xexo = Xexo[esample,:]
     all(isfinite, Xexo) || throw("Some observations for the exogeneous variables are infinite")
 
     basecoef = trues(size(Xexo,2)) # basecoef contains the information of the dropping of the regressors.
@@ -213,6 +212,10 @@ function nlreg(@nospecialize(df),
     # pre separation detection check for collinearity
     Xexo, basecoef = detect_linear_dependency_among_X!(Xexo, basecoef; coefnames=coef_names)
 
+    #####################################################################
+    ##
+    ## checking separation is basically looking for 
+    #####################################################################
     if :simplex ∈ separation
         @warn "simplex not implemented, will ignore."
     end
@@ -266,10 +269,10 @@ function nlreg(@nospecialize(df),
     (nobs > 0) || throw("sample is empty")
 
     # compute tss now before potentially demeaning y
-    tss_total = tss(y, has_intercept | has_fe_intercept, Weights(Ones{Float64}(sum(esample))))
+    tss_total = FixedEffectModels.tss(y, has_intercept | has_fe_intercept, weights)
 
     # Compute data for std errors
-    vcov_method = Vcov.materialize(view(df, esample, :), vcov)
+    vcov_method = Vcov.materialize(view(df, esample, :), vcov) # is earlier in fixedeffectmodels
 
     # mark this as the start of a rerun when collinearity among X and fe is detected, rerun from here.
     @label rerun
@@ -282,7 +285,7 @@ function nlreg(@nospecialize(df),
         beta = 0.1 .* ones(Float64, coeflength)
     end
 
-    Xexo = oldX[esample,:]
+    #Xexo = oldX[esample,:]
     Xexo = GLFixedEffectModels.getcols(Xexo, basecoef) # get Xexo from oldX and basecoef and esample
 
     eta = Xexo * beta
@@ -293,7 +296,7 @@ function nlreg(@nospecialize(df),
 
     Xhat = Xexo
     crossx = Matrix{Float64}(undef, nobs, 0)
-    residuals = y # just for initialization
+    residuals = y[:] # just for initialization
 
     # Stuff that we need in outside scope
     emp = Array{Float64,2}(undef,2,2)
@@ -430,6 +433,11 @@ function nlreg(@nospecialize(df),
             score = Xdemean .* nudemean
             hessian = Symmetric(Xdemean' * Xdemean)
             outer_iterations = i
+            if verbose
+                println("Xdemean")
+                display(Xdemean .* nudemean)
+                display(Xhat .* nu)
+            end
             break
         else
             verbose && println("Iter $i : not converged. Δdev = $((devold - dev)/dev), ||Δβ|| = $(norm(beta_update))")
@@ -504,11 +512,11 @@ function nlreg(@nospecialize(df),
     if has_fes
         for fe in fes
             # adjust degree of freedom only if fe is not fully nested in a cluster variable:
-            if (vcov isa Vcov.ClusterCovariance) && any(isnested(fe, v.refs) for v in values(vcov_method.clusters))
+            if (vcov isa Vcov.ClusterCovariance) && any(FixedEffectModels.isnested(fe, v.groups) for v in values(vcov_method.clusters))
                 dof_absorb += 1 # if fe is nested you still lose 1 degree of freedom
             else
                 #only count groups that exists
-                dof_absorb += nunique(fe)
+                dof_absorb += FixedEffectModels.nunique(fe)
             end
         end
     end
@@ -517,13 +525,29 @@ function nlreg(@nospecialize(df),
 
     nclusters = nothing
     if vcov isa Vcov.ClusterCovariance
-        nclusters = map(x -> length(levels(x)), vcov_method.clusters)
+        nclusters = Vcov.nclusters(vcov_method)
+    end
+    resid_vcov = if size(score, 2) >= 1
+        score[:, 1] ./ Xhat[:, 1]
+    else
+        residuals
     end
 
-    vcov_data = VcovData(Xhat, crossx, residuals, dof_residual_, score, hessian)
+    vcov_data = VcovDataGLM(Xhat, crossx, resid_vcov, dof_residual_)#, hessian)
+    # hessian is unnecessary since in all cases vcov takes the inv(cholesky(hessian)) which is the same as inv(crossx)
+    """
+    This option works if purely using Vcov.jl:
+    if vcov isa Vcov.ClusterCovariance
+        vcov_data = Vcov.VcovData(Xhat, crossx, score[:, 1] ./ Xhat[:, 1], dof_residual_)
+    elseif vcov isa Vcov.RobustCovariance
+        vcov_data = Vcov.VcovData(Xhat, crossx, score[:, 1] ./ Xhat[:, 1], nobs)
+    else
+        vcov_data = Vcov.VcovData(Xhat, crossx, ones(dof_residual_), dof_residual_)
+    end
+    """
 
     # Compute standard error
-    matrix_vcov = StatsBase.vcov(vcov_data, vcov_method)
+    matrix_vcov = StatsAPI.vcov(vcov_data, vcov_method)
 
     ##############################################################################
     ##

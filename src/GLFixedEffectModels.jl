@@ -6,23 +6,23 @@ module GLFixedEffectModels
 ## Dependencies
 ##
 ##############################################################################
-using Base
+
 using LinearAlgebra
 using Statistics
 using Printf
 using FillArrays
 using DataFrames
-using CategoricalArrays
 using Distributions
 using Reexport
-using GLM
-using Combinatorics
-using LoopVectorization
-
-@reexport using StatsBase
-@reexport using GLM
-
 using FixedEffects
+using LoopVectorization
+using Vcov
+using StatsBase
+using StatsAPI
+
+@reexport using GLM
+@reexport using FixedEffectModels
+# not necessary to reexport StatsModels since it is reexported by FixedEffectModels
 
 ##############################################################################
 ##
@@ -46,13 +46,11 @@ bias_correction
 ##############################################################################
 include("GLFixedEffectModel.jl")
 
-include("utils/tss.jl")
+include("utils/vcov.jl")
 include("utils/fixedeffects.jl")
 include("utils/basecol.jl")
-include("utils/formula.jl")
 include("utils/biascorr.jl")
 
-include("vcov/Vcov.jl")
 
 include("fit.jl")
 

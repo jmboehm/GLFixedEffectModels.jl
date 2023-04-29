@@ -36,7 +36,7 @@ struct GLFixedEffectModel <: RegressionModel
 
 end
 
-has_fe(x::GLFixedEffectModel) = has_fe(x.formula)
+FixedEffectModels.has_fe(x::GLFixedEffectModel) = FixedEffectModels.has_fe(x.formula)
 
 
 # Check API at  https://github.com/JuliaStats/StatsBase.jl/blob/65351de819ca64941cb81c047e4b77157446f7c5/src/statmodels.jl
@@ -110,7 +110,7 @@ end
 #     x.augmentdf.residuals
 # end
 
-function fe(x::GLFixedEffectModel)
+function FixedEffectModels.fe(x::GLFixedEffectModel)
    !has_fe(x) && throw("fe() is not defined for fixed effect models without fixed effects")
    x.augmentdf[!, 2:size(x.augmentdf, 2)]
 end
