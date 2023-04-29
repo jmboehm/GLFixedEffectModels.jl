@@ -2,3 +2,4 @@
 /benchmark
 /dataset
 /test/predict.jl
+Manifest.toml

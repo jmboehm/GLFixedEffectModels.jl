@@ -35,13 +35,13 @@ df.RandomCategorical = df.Random
 
 # PROBIT ------------------------------------------------------------------
 # One FE, Probit
-m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), GLM.ProbitLink(), start = [0.2])
+m = @formula binary ~ SepalWidth + fe(SpeciesDummy)
+x = nlreg(df, m, Binomial(), GLM.ProbitLink(), start = [0.2])
 @test x.coef ≈ [4.7793003788996895] atol = 1e-4
 
 # Two FE, Probit
-m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy) + GLFixedEffectModels.fe(RandomCategorical)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), ProbitLink(), start = [0.2] )
+m = @formula binary ~ SepalWidth + fe(SpeciesDummy) + fe(RandomCategorical)
+x = nlreg(df, m, Binomial(), ProbitLink(), start = [0.2] )
 @test x.coef ≈ [4.734428099238226] atol = 1e-4
 # test target value obtained from alpaca::feglm with `dev.tol <- 1e-10`
 
@@ -49,13 +49,13 @@ x = GLFixedEffectModels.nlreg(df, m, Binomial(), ProbitLink(), start = [0.2] )
 # LOGIT ------------------------------------------------------------------
 
 # One FE, Logit
-m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), start = [0.2] )
+m = @formula binary ~ SepalWidth + fe(SpeciesDummy)
+x = nlreg(df, m, Binomial(), LogitLink(), start = [0.2] )
 @test coef(x) ≈ [8.144352] atol = 1e-4
 
 # Two FE, Logit
-m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy) + GLFixedEffectModels.fe(RandomCategorical)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), start = [0.2] )
+m = @formula binary ~ SepalWidth + fe(SpeciesDummy) + fe(RandomCategorical)
+x = nlreg(df, m, Binomial(), LogitLink(), start = [0.2] )
 @test coef(x) ≈ [8.05208] atol = 1e-4
 # make sure that showing works
 @show x
@@ -63,26 +63,26 @@ x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), start = [0.2] )
 
 
 # VCov
-m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), GLFixedEffectModels.Vcov.simple() , start = [0.2] )
+m = @formula binary ~ SepalWidth + fe(SpeciesDummy)
+x = nlreg(df, m, Binomial(), LogitLink(), Vcov.simple() , start = [0.2] )
 # result = Alpaca.feglm(df, Alpaca.@formula(binary ~ SepalWidth),
 #     Binomial(),
 #     fe = :SpeciesDummy,
 #     start = [0.2], trace = 2)
 @test vcov(x) ≈ [3.585929] atol = 1e-4
-m = GLFixedEffectModels.@formula binary ~ SepalWidth + PetalLength + GLFixedEffectModels.fe(SpeciesDummy)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), GLFixedEffectModels.Vcov.robust() , start = [0.2, 0.2] )
+m = @formula binary ~ SepalWidth + PetalLength + fe(SpeciesDummy)
+x = nlreg(df, m, Binomial(), LogitLink(), Vcov.robust() , start = [0.2, 0.2] )
 @test vcov(x) ≈ [ 2.28545  0.35542; 0.35542  3.65724] atol = 1e-4
-m = GLFixedEffectModels.@formula binary ~ SepalWidth + PetalLength + GLFixedEffectModels.fe(SpeciesDummy)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), GLFixedEffectModels.Vcov.cluster(:SpeciesDummy) , start = [0.2, 0.2] )
+m = @formula binary ~ SepalWidth + PetalLength + fe(SpeciesDummy)
+x = nlreg(df, m, Binomial(), LogitLink(), Vcov.cluster(:SpeciesDummy) , start = [0.2, 0.2] )
 @test vcov(x) ≈ [ 1.48889   0.464914; 0.464914  3.07176 ] atol = 1e-4
-m = GLFixedEffectModels.@formula binary ~ SepalWidth + PetalLength + GLFixedEffectModels.fe(SpeciesDummy)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), GLFixedEffectModels.Vcov.cluster(:SpeciesDummy,:RandomCategorical) , start = [0.2, 0.2] )
+m = @formula binary ~ SepalWidth + PetalLength + fe(SpeciesDummy)
+x = nlreg(df, m, Binomial(), LogitLink(), Vcov.cluster(:SpeciesDummy,:RandomCategorical) , start = [0.2, 0.2] )
 @test vcov(x) ≈ [0.43876 0.315690; 0.315690 1.59676] atol = 1e-4
 
 # Save fe
-m = GLFixedEffectModels.@formula binary ~ SepalWidth + GLFixedEffectModels.fe(SpeciesDummy)
-x = GLFixedEffectModels.nlreg(df, m, Binomial(), LogitLink(), start = [0.2] , save = [:fe] )
+m = @formula binary ~ SepalWidth + fe(SpeciesDummy)
+x = nlreg(df, m, Binomial(), LogitLink(), start = [0.2] , save = [:fe] )
 fes = Float64[]
 for c in levels(df.SpeciesDummy)
     push!(fes, x.augmentdf[df.SpeciesDummy .== c, :fe_SpeciesDummy][1])
@@ -120,16 +120,16 @@ df.id1 = id1
 df.id2 = id2
 
 # One FE, Poisson
-m = GLFixedEffectModels.@formula y ~ x1 + x2 + GLFixedEffectModels.fe(id1)
-x = GLFixedEffectModels.nlreg(df, m, Poisson(), LogLink() , start = [0.2;0.2] )
+m = @formula y ~ x1 + x2 + fe(id1)
+x = nlreg(df, m, Poisson(), LogLink() , start = [0.2;0.2] )
 # result = Alpaca.feglm(df, Alpaca.@formula(y ~ x1 + x2),
 #     Poisson(),
 #     fe =:(id1)
 #     )
 @test coef(x) ≈ [2.9912251435680237; 2.002088081633829] atol = 1e-4
 # Two FE, Poisson
-m = GLFixedEffectModels.@formula y ~ x1 + x2 + GLFixedEffectModels.fe(id1) +  GLFixedEffectModels.fe(id2)
-x = GLFixedEffectModels.nlreg(df, m, Poisson(), LogLink() , start = [0.2;0.2] )
+m = @formula y ~ x1 + x2 + fe(id1) +  fe(id2)
+x = nlreg(df, m, Poisson(), LogLink() , start = [0.2;0.2] )
 # result = Alpaca.feglm(df, Alpaca.@formula(y ~ x1 + x2),
 #     Poisson(),
 #     fe =:(id1 + id2)
@@ -139,17 +139,17 @@ x = GLFixedEffectModels.nlreg(df, m, Poisson(), LogLink() , start = [0.2;0.2] )
 # Separation: based on Sergio Correia's example (https://github.com/sergiocorreia/ppmlhdfe/blob/master/guides/separation_primer.md) but with logit (easier to generate)
 rng = StableRNG(1234)
 df_sep = DataFrame(y = [[0.0, 0.0, 0.0, 1.0, 1.0, 1.0];rand(rng,[0.0,1.0],500)], x1 = [[1, 1, 0, 0, 0, 0];zeros(Float64,500)], x = collect(1.0:(6.0+500.0)))
-m = GLFixedEffectModels.@formula y ~ x + GLFixedEffectModels.fe(x1)
+m = @formula y ~ x + fe(x1)
 try
     # this should fail
-    x = GLFixedEffectModels.nlreg(df_sep, m, Binomial(), LogitLink() , start = [0.1], separation = Symbol[], separation_mu_lbound=1e-10, separation_mu_ubound=1.0-1e-10, verbose=true, rho_tol=1e-12 )
+    x = nlreg(df_sep, m, Binomial(), LogitLink() , start = [0.1], separation = Symbol[], separation_mu_lbound=1e-10, separation_mu_ubound=1.0-1e-10, verbose=true, rho_tol=1e-12 )
 catch ex
     @test !isnothing(ex)
 end
 # with cutoff on mu, it converges
 try
     # this should pass
-    x = GLFixedEffectModels.nlreg(df_sep, m, Binomial(), LogitLink() , start = [0.1], separation = [:mu], separation_mu_lbound=1e-10, separation_mu_ubound=1.0-1e-10, verbose=true, rho_tol=1e-12 )
+    x = nlreg(df_sep, m, Binomial(), LogitLink() , start = [0.1], separation = [:mu], separation_mu_lbound=1e-10, separation_mu_ubound=1.0-1e-10, verbose=true, rho_tol=1e-12 )
     @test x.coef ≈ [-0.0005504145168443688] atol = 1e-4
 catch ex
     @test isnothing(ex)

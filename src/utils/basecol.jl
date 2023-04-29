@@ -1,26 +1,3 @@
-##############################################################################
-##
-## Combination behaves like [A B C ...] without forming it
-## 
-##############################################################################
-
-struct Combination{T} <: AbstractMatrix{T}
-    A::Tuple
-    cumlength::Vector{Int}
-end
-
-function Combination(A::Union{AbstractVector{T}, AbstractMatrix{T}}...) where {T}
-    Combination{T}(A, cumsum([size(x, 2) for x in A]))
-end
-
-Base.size(c::Combination) = (size(c.A[1], 1), c.cumlength[end])
-Base.size(c::Combination, i::Integer) = size(c)[i]
-
-function Base.view(c::Combination, ::Colon, j)
-    index = searchsortedfirst(c.cumlength, j)
-    newj = index == 1 ? j : j - c.cumlength[index-1]
-    view(c.A[index], :, newj)
-end
 
 ##############################################################################
 ##
