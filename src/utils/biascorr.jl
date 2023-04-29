@@ -68,7 +68,7 @@ We only support the following models:
 - Poisson regression, Log link, Two-way, Network
 """
 function bias_correction(model::GLFixedEffectModel,df::DataFrame;i_symb::Union{Symbol,Nothing}=nothing,j_symb::Union{Symbol,Nothing}=nothing,t_symb::Union{Symbol,Nothing}=nothing,L::Int64=0,panel_structure::Symbol=:classic)
-    @assert :mu in propertynames(model.augmentdf) and :eta in propertynames(model.augmentdf) "please save :eta and :mu before bias correction"
+    @assert :mu in propertynames(model.augmentdf) && :eta in propertynames(model.augmentdf) "please save :eta and :mu before bias correction"
     @assert panel_structure in [:classic, :network] "you can only choose :classic or :network for panel_structure"
     @assert typeof(model.distribution) <: Union{Binomial,Poisson} "currently only support binomial regression and poisson regression"
     @assert typeof(model.link) <: Union{GLM.LogitLink,GLM.ProbitLink,GLM.LogLink} "currently only support probit and logit link (binomial regression), and log link (poisson regression)"
@@ -440,7 +440,7 @@ function parse_formula_get_FEs(model,panel_structure::Symbol,df::DataFrame)
     # If the panel_structure is classic, it checks to see if there is interaction term in the formula. If true, it throws error. It returns all the fe symbols otherwise
     vars = StatsModels.termvars(model.formula) # all the vars excluding interactions
     vars_name_to_be_set_diff = Symbol.("fe_",vars) # all the vars symbols excluding interactions (add "fe_" in the front)
-    fes, ids, formula = parse_fixedeffect(df, model.formula) # id: include fe_i, fe_j, fe_t, and possible interactions if panel_structure = :network
+    fes, ids, formula = FixedEffectModels.parse_fixedeffect(df, model.formula) # id: include fe_i, fe_j, fe_t, and possible interactions if panel_structure = :network
     if panel_structure == :network
         network_fes = setdiff(ids,vars_name_to_be_set_diff)
         if length(network_fes) != 0
