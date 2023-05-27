@@ -18,6 +18,7 @@ using FixedEffects
 using LoopVectorization
 using Vcov
 using StatsBase
+using StatsModels
 using StatsAPI
 
 @reexport using GLM
