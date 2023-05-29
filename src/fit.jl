@@ -90,8 +90,8 @@ function nlreg(@nospecialize(df),
     ##############################################################################
 
     formula_origin = formula
-    if  !omitsintercept(formula) & !hasintercept(formula)
-        formula = FormulaTerm(formula.lhs, InterceptTerm{true}() + formula.rhs)
+    if  !StatsModels.omitsintercept(formula) & !StatsModels.hasintercept(formula)
+        formula = StatsModels.FormulaTerm(formula.lhs, StatsModels.InterceptTerm{true}() + formula.rhs)
     end
     formula, formula_endo, formula_iv = FixedEffectModels.parse_iv(formula)
     has_iv = formula_iv != nothing
