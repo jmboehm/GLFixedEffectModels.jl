@@ -91,6 +91,34 @@ end
 @test fes[2] ≈ -17.507252832 atol = 1e-4
 @test fes[3] ≈ -17.851658274 atol = 1e-4
 
+
+# loglikelihood and psuedo r2
+
+m = @formula binary ~ SepalWidth + fe(Species)
+x = nlreg(df, m, Binomial(), LogitLink(), Vcov.cluster(:Species) , start = [0.2] )
+@test loglikelihood(x) ≈ -27.58750 atol = 1e-4
+@test pseudo_r2(x) ≈ 0.64518 atol = 1e-4
+@test pseudo_adjr2(x) ≈ 0.60660 atol = 1e-4
+
+m = @formula binary ~ SepalWidth + PetalLength + fe(Species)
+x = nlreg(df, m, Binomial(), LogitLink(), Vcov.cluster(:Species) , start = [0.2, 0.2] )
+@test loglikelihood(x) ≈ -21.35416 atol = 1e-4
+@test pseudo_r2(x) ≈ 0.72535 atol = 1e-4
+@test pseudo_adjr2(x) ≈ 0.67391 atol = 1e-4
+
+m = @formula binary ~ SepalWidth + fe(Species)
+x = nlreg(df, m, Poisson(), LogLink(), Vcov.cluster(:Species) , start = [0.2] )
+@test loglikelihood(x) ≈ -137.19554 atol = 1e-4
+@test pseudo_r2(x) ≈ 0.06232 atol = 1e-4
+@test pseudo_adjr2(x) ≈ 0.04182 atol = 1e-4
+
+m = @formula binary ~ SepalWidth + PetalLength + fe(Species)
+x = nlreg(df, m, Poisson(), LogLink(), Vcov.cluster(:Species) , start = [0.2, 0.2] )
+@test loglikelihood(x) ≈ -137.19365 atol = 1e-4
+@test pseudo_r2(x) ≈ 0.06234 atol = 1e-4
+@test pseudo_adjr2(x) ≈ 0.03500 atol = 1e-4
+
+
 # For comparison with Alpaca.jl
 # result = Alpaca.feglm(df, Alpaca.@formula(binary ~ SepalWidth + PetalLength),
 #     Binomial(),

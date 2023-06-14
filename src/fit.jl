@@ -509,6 +509,7 @@ function nlreg(@nospecialize(df),
 
     # Compute degrees of freedom
     dof_absorb = 0
+    dof_coef_and_fe = sum(basecoef) + dof_add - 1 # -1 for the constant
     if has_fes
         for fe in fes
             # adjust degree of freedom only if fe is not fully nested in a cluster variable:
@@ -518,6 +519,7 @@ function nlreg(@nospecialize(df),
                 #only count groups that exists
                 dof_absorb += FixedEffectModels.nunique(fe)
             end
+            dof_coef_and_fe = dof_coef_and_fe + FixedEffectModels.nunique(fe)
         end
     end
     _n_coefs = sum(basecoef) + dof_absorb + dof_add
@@ -578,6 +580,8 @@ function nlreg(@nospecialize(df),
         outer_converged,
         esample,
         augmentdf,
+        oldy,
+        mu,
         distribution,
         link,
         coef_names,
@@ -585,6 +589,7 @@ function nlreg(@nospecialize(df),
         formula_origin, # Original formula
         formula_schema,
         nobs,   # Number of observations
+        dof_coef_and_fe, # Number of coefficients
         dof_residual_,  # nobs - degrees of freedoms
         dev, # Deviance of the fitted model
         nulldev, # null deviance

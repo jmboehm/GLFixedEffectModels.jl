@@ -38,7 +38,9 @@ has_fe,
 Vcov,
 VcovData,
 responsename,
-bias_correction
+bias_correction,
+pseudo_r2,
+pseudo_adjr2
 
 ##############################################################################
 ##
