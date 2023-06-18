@@ -16,8 +16,8 @@ struct GLFixedEffectModel <: RegressionModel
 
     esample::BitVector      # Is the row of the original dataframe part of the estimation sample?
     augmentdf::DataFrame
-    y::Vector{Float64}      # Dependent variable
-    mu::Vector{Float64}     # Fitted values
+    loglikelihood::Float64
+    nullloglikelihood::Float64
 
     distribution::Distribution
     link::GLM.Link
@@ -63,23 +63,15 @@ function StatsAPI.confint(x::GLFixedEffectModel, level::Real = 0.95)
     se = stderror(x)
     hcat(x.coef -  scale * se, x.coef + scale * se)
 end
-function StatsAPI.loglikelihood(m::GLFixedEffectModel)
-    # would need to change if weights are added
-    y   = m.y
-    mu  = m.mu
-    d   = m.distribution
-    ϕ = deviance(m)/length(y)
-    sum(GLM.loglik_obs.(Ref(d), y, mu, 1, ϕ))
-end
-function StatsAPI.nullloglikelihood(m::GLFixedEffectModel)
-    y      = m.y
-    d      = m.distribution
-    hasint = hasintercept(m.formula) || has_fe(m)
-    ll  = zero(eltype(y))
-    mu = hasint ? mean(y) : linkinv(m.link, zero(ll)/1)
-    ϕ = nulldeviance(m)/length(y)
-    sum(GLM.loglik_obs.(Ref(d), y, mu, 1, ϕ))
-end
+StatsAPI.loglikelihood(m::GLFixedEffectModel) = m.loglikelihood
+    
+StatsAPI.nullloglikelihood(m::GLFixedEffectModel) = m.nullloglikelihood
+
+glfe_loglik_obs(dist, y, μ, wt, ϕ) = GLM.loglik_obs(dist, y, μ, wt, ϕ)
+# GLM loglik_obs for Binomial tries to convert y * wt to an Int, but in this package it is often
+# the case that y is not an Int or like an Int
+glfe_loglik_obs(::Binomial, y, μ, wt, ϕ) = logpdf(Binomial(Int(wt), μ), y * wt)
+
 # TODO: check whether this is equal to x.gradient
 StatsAPI.score(x::GLFixedEffectModel) = error("score is not yet implemented for $(typeof(x)).")
 

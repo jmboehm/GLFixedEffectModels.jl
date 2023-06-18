@@ -172,7 +172,7 @@ function nlreg(@nospecialize(df),
     # Obtain y
     # for a Vector{Float64}, conver(Vector{Float64}, y) aliases y
     y = convert(Vector{Float64}, response(formula_schema, subdf))
-    oldy = deepcopy(y)
+    oldy = deepcopy(response(formula_schema, df))
     #y = y[esample]
     all(isfinite, y) || throw("Some observations for the dependent variable are infinite")
 
@@ -550,6 +550,19 @@ function nlreg(@nospecialize(df),
 
     # Compute standard error
     matrix_vcov = StatsAPI.vcov(vcov_data, vcov_method)
+    oldy = oldy[esample]
+    # would need to change if weights are added
+    if length(oldy) < 10
+        println(oldy)
+        println(mu)
+    end
+    ϕ_ll = dev/length(oldy)
+    println(ϕ_ll)
+    ll = sum(glfe_loglik_obs.(Ref(distribution), oldy, mu, 1, ϕ_ll))
+
+    ϕ_nll = nulldev/length(oldy)
+    mu_nll = has_intercept || has_fes ? mean(oldy) : linkinv(link, zero(eltype(oldy))/1)
+    null_ll = sum(glfe_loglik_obs.(Ref(distribution), oldy, mu_nll, 1, ϕ_nll))
 
     ##############################################################################
     ##
@@ -580,8 +593,8 @@ function nlreg(@nospecialize(df),
         outer_converged,
         esample,
         augmentdf,
-        oldy,
-        mu,
+        ll,
+        null_ll,
         distribution,
         link,
         coef_names,
