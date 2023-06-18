@@ -16,6 +16,8 @@ struct GLFixedEffectModel <: RegressionModel
 
     esample::BitVector      # Is the row of the original dataframe part of the estimation sample?
     augmentdf::DataFrame
+    loglikelihood::Float64
+    nullloglikelihood::Float64
 
     distribution::Distribution
     link::GLM.Link
@@ -26,7 +28,8 @@ struct GLFixedEffectModel <: RegressionModel
     formula_schema
 
     nobs::Int64             # Number of observations
-    dof_residual::Int64     # nobs - degrees of freedoms
+    dof::Int64              # Degrees of freedom: nparams (including fixed effects)
+    dof_residual::Int64     # nobs - degrees of freedoms, adjusted for clustering
 
     deviance::Float64            # Deviance of the fitted model
     nulldeviance::Float64        # Null deviance, i.e. deviance of model with constant only
@@ -46,18 +49,29 @@ StatsAPI.coefnames(x::GLFixedEffectModel) = x.coefnames
 StatsAPI.responsename(x::GLFixedEffectModel) = string(x.yname)
 StatsAPI.vcov(x::GLFixedEffectModel) = x.vcov
 StatsAPI.nobs(x::GLFixedEffectModel) = x.nobs
+StatsAPI.dof(x::GLFixedEffectModel) = x.dof
 StatsAPI.dof_residual(x::GLFixedEffectModel) = x.dof_residual
 StatsAPI.islinear(x::GLFixedEffectModel) = (x.link == IdentityLink() ? true : false)
 StatsAPI.deviance(x::GLFixedEffectModel) = x.deviance
 StatsAPI.nulldeviance(x::GLFixedEffectModel) = x.nulldeviance
+
+pseudo_r2(x::GLFixedEffectModel) = r2(x, :McFadden)
+pseudo_adjr2(x::GLFixedEffectModel) = adjr2(x, :McFadden)
 
 function StatsAPI.confint(x::GLFixedEffectModel, level::Real = 0.95)
     scale = quantile(Normal(), 1. - (1. - level)/2.)
     se = stderror(x)
     hcat(x.coef -  scale * se, x.coef + scale * se)
 end
-StatsAPI.loglikelihood(x::GLFixedEffectModel) = error("loglikelihood is not yet implemented for $(typeof(x)).")
-StatsAPI.nullloglikelihood(x::GLFixedEffectModel) = error("nullloglikelihood is not yet implemented for $(typeof(x)).")
+StatsAPI.loglikelihood(m::GLFixedEffectModel) = m.loglikelihood
+    
+StatsAPI.nullloglikelihood(m::GLFixedEffectModel) = m.nullloglikelihood
+
+glfe_loglik_obs(dist, y, μ, wt, ϕ) = GLM.loglik_obs(dist, y, μ, wt, ϕ)
+# GLM loglik_obs for Binomial tries to convert y * wt to an Int, but in this package it is often
+# the case that y is not an Int or like an Int
+glfe_loglik_obs(::Binomial, y, μ, wt, ϕ) = logpdf(Binomial(Int(wt), μ), y * wt)
+
 # TODO: check whether this is equal to x.gradient
 StatsAPI.score(x::GLFixedEffectModel) = error("score is not yet implemented for $(typeof(x)).")
 
@@ -138,6 +152,8 @@ function top(x::GLFixedEffectModel)
             "Number of obs" sprint(show, nobs(x), context = :compact => true);
             "Degrees of freedom" sprint(show, nobs(x) - dof_residual(x), context = :compact => true);
             "Deviance" format_scientific(deviance(x));
+            "Pseudo-R2" format_scientific(pseudo_r2(x));
+            "Pseudo-Adj. R2" format_scientific(pseudo_adjr2(x));
             ]
     if has_fe(x)
         out = vcat(out,

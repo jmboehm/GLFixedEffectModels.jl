@@ -172,7 +172,7 @@ function nlreg(@nospecialize(df),
     # Obtain y
     # for a Vector{Float64}, conver(Vector{Float64}, y) aliases y
     y = convert(Vector{Float64}, response(formula_schema, subdf))
-    oldy = deepcopy(y)
+    oldy = deepcopy(response(formula_schema, df))
     #y = y[esample]
     all(isfinite, y) || throw("Some observations for the dependent variable are infinite")
 
@@ -509,6 +509,7 @@ function nlreg(@nospecialize(df),
 
     # Compute degrees of freedom
     dof_absorb = 0
+    dof_coef_and_fe = sum(basecoef) + dof_add - 1 # -1 for the constant
     if has_fes
         for fe in fes
             # adjust degree of freedom only if fe is not fully nested in a cluster variable:
@@ -518,6 +519,7 @@ function nlreg(@nospecialize(df),
                 #only count groups that exists
                 dof_absorb += FixedEffectModels.nunique(fe)
             end
+            dof_coef_and_fe = dof_coef_and_fe + FixedEffectModels.nunique(fe)
         end
     end
     _n_coefs = sum(basecoef) + dof_absorb + dof_add
@@ -548,6 +550,14 @@ function nlreg(@nospecialize(df),
 
     # Compute standard error
     matrix_vcov = StatsAPI.vcov(vcov_data, vcov_method)
+    oldy = oldy[esample]
+    # would need to change if weights are added
+    ϕ_ll = dev/length(oldy)
+    ll = sum(glfe_loglik_obs.(Ref(distribution), oldy, mu, 1, ϕ_ll))
+
+    ϕ_nll = nulldev/length(oldy)
+    mu_nll = has_intercept || has_fes ? mean(oldy) : linkinv(link, zero(eltype(oldy))/1)
+    null_ll = sum(glfe_loglik_obs.(Ref(distribution), oldy, mu_nll, 1, ϕ_nll))
 
     ##############################################################################
     ##
@@ -578,6 +588,8 @@ function nlreg(@nospecialize(df),
         outer_converged,
         esample,
         augmentdf,
+        ll,
+        null_ll,
         distribution,
         link,
         coef_names,
@@ -585,6 +597,7 @@ function nlreg(@nospecialize(df),
         formula_origin, # Original formula
         formula_schema,
         nobs,   # Number of observations
+        dof_coef_and_fe, # Number of coefficients
         dof_residual_,  # nobs - degrees of freedoms
         dev, # Deviance of the fitted model
         nulldev, # null deviance
