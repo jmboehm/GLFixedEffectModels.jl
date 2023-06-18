@@ -552,12 +552,7 @@ function nlreg(@nospecialize(df),
     matrix_vcov = StatsAPI.vcov(vcov_data, vcov_method)
     oldy = oldy[esample]
     # would need to change if weights are added
-    if length(oldy) < 10
-        println(oldy)
-        println(mu)
-    end
     ϕ_ll = dev/length(oldy)
-    println(ϕ_ll)
     ll = sum(glfe_loglik_obs.(Ref(distribution), oldy, mu, 1, ϕ_ll))
 
     ϕ_nll = nulldev/length(oldy)
