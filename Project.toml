@@ -1,7 +1,7 @@
 name = "GLFixedEffectModels"
 uuid = "bafb0ae5-e5f5-5100-81b6-6a55d777c812"
 authors = ["Johannes Boehm <johannes.boehm@gmail.com>"]
-version = "0.5.1"
+version = "0.5.2"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
