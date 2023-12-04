@@ -25,7 +25,7 @@ end
 
 # rank(A) == rank(A'A)
 function basecol(X::AbstractMatrix...; factorization = :Cholesky)
-    @statif if VERSION >= v"1.7"
+    @static if VERSION >= v"1.7"
         cholm = cholesky!(Symmetric(crossprod(X...)), RowMaximum(); tol = -1, check = false)
     else
         cholm = cholesky!(Symmetric(crossprod(X...)), Val(true); tol = -1, check = false)
