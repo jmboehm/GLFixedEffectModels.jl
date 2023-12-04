@@ -535,7 +535,7 @@ function nlreg(@nospecialize(df),
         residuals
     end
 
-    vcov_data = VcovDataGLM(Xhat, crossx, resid_vcov, dof_residual_)#, hessian)
+    vcov_data = VcovDataGLM(Xhat, crossx, inv(crossx), resid_vcov, dof_residual_)#, hessian)
     # hessian is unnecessary since in all cases vcov takes the inv(cholesky(hessian)) which is the same as inv(crossx)
     """
     This option works if purely using Vcov.jl:

@@ -25,7 +25,7 @@ end
 
 # rank(A) == rank(A'A)
 function basecol(X::AbstractMatrix...; factorization = :Cholesky)
-    cholm = cholesky!(Symmetric(crossprod(X...)), Val(true); tol = -1, check = false)
+    cholm = cholesky!(Symmetric(crossprod(X...)), RowMaximum(); tol = -1, check = false)
     r = 0
     if size(cholm, 1) > 0
         r = sum(diag(cholm.factors) .> size(X[1],1)^2 * eps())
