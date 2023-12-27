@@ -94,8 +94,8 @@ function nlreg(@nospecialize(df),
         formula = StatsModels.FormulaTerm(formula.lhs, StatsModels.InterceptTerm{true}() + formula.rhs)
     end
     formula, formula_endo, formula_iv = FixedEffectModels.parse_iv(formula)
-    has_iv = formula_iv != nothing
-    has_weights = weights != nothing
+    has_iv = formula_iv != StatsModels.FormulaTerm(ConstantTerm(0), ConstantTerm(0))
+    has_weights = weights !== nothing
     if has_iv
         error("Instrumental variables are not allowed.")
     end
@@ -133,8 +133,17 @@ function nlreg(@nospecialize(df),
     end
     esample .&= Vcov.completecases(df, vcov)
 
-    fes, ids, fekeys, formula = FixedEffectModels.parse_fixedeffect(df, formula)
-    has_fes = !isempty(fes)
+    formula, formula_fes = FixedEffectModels.parse_fe(formula)
+    has_fes = formula_fes != FormulaTerm(ConstantTerm(0), ConstantTerm(0))
+    fes, ids, fekeys = FixedEffectModels.parse_fixedeffect(df, formula_fes)
+
+    has_fe_intercept = any(fe.interaction isa UnitWeights for fe in fes)
+
+    # remove intercept if absorbed by fixed effects
+    if has_fe_intercept
+        formula = FormulaTerm(formula.lhs, tuple(InterceptTerm{false}(), (term for term in FixedEffectModels.eachterm(formula.rhs) if !isa(term, Union{ConstantTerm,InterceptTerm}))...))
+    end
+    has_intercept = hasintercept(formula)
 
     if has_fes
         if drop_singletons
@@ -147,14 +156,6 @@ function nlreg(@nospecialize(df),
             if dropped_n > 0
                 @info "$(dropped_n) observations detected as singletons. Dropping them ..."
             end
-        end
-    end
-
-    has_intercept = hasintercept(formula)
-    has_fe_intercept = false
-    if has_fes
-        if any(fe.interaction isa Ones for fe in fes)
-            has_fe_intercept = true
         end
     end
 
