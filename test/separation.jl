@@ -12,12 +12,12 @@ df = DataFrame(y = rand(6), x1 = [1;0.5;0.8;1;0;0], x2 = [0;0.5;0.2;0;0;0], id =
 # y ~ x1 + x2 + fe(id), will drop x2
 res1 = nlreg(df, @formula(y ~ x1 + x2 + fe(id)), Poisson(), LogLink())
 @test 0 ∈ res1.coef
-@show res1
+#@show res1
 # y ~ x1 + fe(id)
 
 res2 = nlreg(df, @formula(y ~ x2 + fe(id)), Poisson(), LogLink())
 @test 0 ∉ res2.coef
-@show res2
+#@show res2
 
 # ---------------------------------------------------------------------------------------------------------------- #
 
