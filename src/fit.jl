@@ -51,6 +51,7 @@ function nlreg(@nospecialize(df),
     dof_add::Integer = 0,
     save::Vector{Symbol} = Symbol[],
     method::Symbol = :cpu,
+    nthreads::Integer = method == :cpu ? Threads.nthreads() : 256,
     drop_singletons = true,
     double_precision::Bool = true,
     dev_tol::Real = 1.0e-8, # tolerance level for the first stopping condition of the maximization routine.
@@ -81,6 +82,11 @@ function nlreg(@nospecialize(df),
     end
     if subsetformula != nothing
         subset = eval(evaluate_subset(df, subsetformula))
+    end
+
+    if method == :cpu && nthreads > Threads.nthreads()
+        @warn "Keyword argument nthreads = $(nthreads) is ignored (Julia was started with only $(Threads.nthreads()) threads)."
+        nthreads = Threads.nthreads()
     end
 
     ##############################################################################
@@ -157,6 +163,8 @@ function nlreg(@nospecialize(df),
                 @info "$(dropped_n) observations detected as singletons. Dropping them ..."
             end
         end
+    else
+        error("No fixed effect specified. Use GLM.jl for the estimation of generalized linear models without fixed effects.")
     end
 
     save_fe = (:fe ∈ save) & has_fes 
@@ -263,7 +271,7 @@ function nlreg(@nospecialize(df),
     Xexo, basecoef = detect_linear_dependency_among_X!(Xexo, basecoef; coefnames=coef_names)
 
     weights = Weights(Ones{Float64}(sum(esample)))
-    feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
+    feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method}, nthreads)
 
     # make one copy after deleting NAs + dropping singletons + detecting separations (fe + relu)
     nobs = sum(esample)
@@ -283,7 +291,8 @@ function nlreg(@nospecialize(df),
         (length(start) == coeflength) || error("Invalid length of `start` argument.")
         beta = start
     else
-        beta = 0.1 .* ones(Float64, coeflength)
+        # beta = zeros(double_precision ? Float64 : Float32, coeflength)
+        beta = 0.1 .* ones(double_precision ? Float64 : Float32, coeflength)
     end
 
     #Xexo = oldX[esample,:]
@@ -291,16 +300,16 @@ function nlreg(@nospecialize(df),
 
     eta = Xexo * beta
     mu = GLM.linkinv.(Ref(link),eta)
-    wt = ones(Float64, nobs, 1)
+    wt = ones(double_precision ? Float64 : Float32, nobs, 1)
     dev = sum(devresid.(Ref(distribution), y, mu))
     nulldev = sum(devresid.(Ref(distribution), mean(y), mu))
 
     Xhat = Xexo
-    crossx = Matrix{Float64}(undef, nobs, 0)
+    crossx = Matrix{double_precision ? Float64 : Float32}(undef, nobs, 0)
     residuals = y[:] # just for initialization
 
     # Stuff that we need in outside scope
-    emp = Array{Float64,2}(undef,2,2)
+    emp = Array{double_precision ? Float64 : Float32,2}(undef,2,2)
     score = hessian = emp
 
     outer_iterations = 0
@@ -439,6 +448,11 @@ function nlreg(@nospecialize(df),
                 display(Xdemean .* nudemean)
                 display(Xhat .* nu)
             end
+
+            # if dev > nulldev
+            #     @warn "Final deviance exceeds null deviance. Possibly running into a local maximum. Try restarting with a different starting guess."
+            # end
+
             break
         else
             verbose && println("Iter $i : not converged. Δdev = $((devold - dev)/dev), ||Δβ|| = $(norm(beta_update))")
@@ -463,7 +477,7 @@ function nlreg(@nospecialize(df),
     augmentdf = DataFrame()
     if save_residuals
         if nobs < length(esample)
-            augmentdf.residuals = Vector{Union{Float64, Missing}}(missing, length(esample))
+            augmentdf.residuals = Vector{Union{double_precision ? Float64 : Float32, Missing}}(missing, length(esample))
             augmentdf[esample, :residuals] = residuals
         else
             augmentdf[!, :residuals] = residuals
@@ -473,12 +487,15 @@ function nlreg(@nospecialize(df),
         oldX = oldX[esample,:]
         oldX = getcols(oldX, basecoef)
         # update FixedEffectSolver
-        weights = Weights(Ones{Float64}(sum(esample)))
+        weights = Weights(Ones{double_precision ? Float64 : Float32}(sum(esample)))
         feM = AbstractFixedEffectSolver{double_precision ? Float64 : Float32}(fes, weights, Val{method})
         newfes, b, c = solve_coefficients!(eta - oldX * coef, feM; tol = center_tol, maxiter = maxiter_center)
+        for fekey in fekeys
+            augmentdf[!, fekey] = df[:, fekey]
+        end
         for j in 1:length(fes)
             if nobs < length(esample)
-                augmentdf[!, ids[j]] = Vector{Union{Float64, Missing}}(missing, length(esample))
+                augmentdf[!, ids[j]] = Vector{Union{double_precision ? Float64 : Float32, Missing}}(missing, length(esample))
                 augmentdf[esample, ids[j]] = newfes[j]
             else
                 augmentdf[!, ids[j]] = newfes[j]
@@ -487,7 +504,7 @@ function nlreg(@nospecialize(df),
     end
     if :mu ∈ save 
         if nobs < length(esample)
-            augmentdf.mu = Vector{Union{Float64, Missing}}(missing, length(esample))
+            augmentdf.mu = Vector{Union{double_precision ? Float64 : Float32, Missing}}(missing, length(esample))
             augmentdf[esample, :mu] = mu
         else
             augmentdf[!, :mu] = mu
@@ -495,7 +512,7 @@ function nlreg(@nospecialize(df),
     end
     if :eta ∈ save 
         if nobs < length(esample)
-            augmentdf.eta = Vector{Union{Float64, Missing}}(missing, length(esample))
+            augmentdf.eta = Vector{Union{double_precision ? Float64 : Float32, Missing}}(missing, length(esample))
             augmentdf[esample, :eta] = eta
         else
             augmentdf[!, :eta] = eta
@@ -589,6 +606,7 @@ function nlreg(@nospecialize(df),
         outer_converged,
         esample,
         augmentdf,
+        fekeys,
         ll,
         null_ll,
         distribution,

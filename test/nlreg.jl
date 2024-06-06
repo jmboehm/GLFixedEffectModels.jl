@@ -36,7 +36,7 @@ df.RandomCategorical = df.Random
 # PROBIT ------------------------------------------------------------------
 # One FE, Probit
 m = @formula binary ~ SepalWidth + fe(SpeciesDummy)
-x = nlreg(df, m, Binomial(), GLM.ProbitLink(), start = [0.2])
+x = nlreg(df, m, Binomial(), GLM.ProbitLink(), start = [0.2], save = [:fe])
 @test x.coef ≈ [4.7793003788996895] atol = 1e-4
 
 # Two FE, Probit
