@@ -16,6 +16,7 @@ struct GLFixedEffectModel <: RegressionModel
 
     esample::BitVector      # Is the row of the original dataframe part of the estimation sample?
     augmentdf::DataFrame
+    fekeys::Vector{Symbol}
     loglikelihood::Float64
     nullloglikelihood::Float64
 
@@ -126,7 +127,7 @@ end
 
 function FixedEffectModels.fe(x::GLFixedEffectModel)
    !has_fe(x) && throw("fe() is not defined for fixed effect models without fixed effects")
-   x.augmentdf[!, 2:size(x.augmentdf, 2)]
+   x.augmentdf[!, Symbol.( "fe_" .* String.(x.fekeys))]
 end
 
 
