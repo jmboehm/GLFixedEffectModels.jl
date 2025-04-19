@@ -154,9 +154,7 @@ function nlreg(@nospecialize(df),
     if has_fes
         if drop_singletons
             before_n = sum(esample)
-            for fe in fes
-                FixedEffectModels.drop_singletons!(esample, fe)
-            end
+            FixedEffectModels.drop_singletons!(esample, fes, nthreads)
             after_n = sum(esample)
             dropped_n = before_n - after_n
             if dropped_n > 0
