@@ -59,35 +59,35 @@ url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/cs
 df = DataFrame(CSV.File(Downloads.download(url)))
 res1 = nlreg(df, @formula(y ~ x1 + fe(i) + fe(j)), Poisson(), LogLink() ; separation = [:ReLU])
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/01.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/01.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + fe(id1) + fe(id2)), Poisson(), LogLink() ; separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/02.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/02.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 res1 = nlreg(df, @formula(y ~ fe(id1) + fe(id2)), Poisson(), LogLink() ; drop_singletons = false, separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/03.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/03.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 res1 = nlreg(df, @formula(y ~ fe(id1) + fe(id2) + fe(id3)), Poisson(), LogLink() ; separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/04.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/04.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 res1 = nlreg(df, @formula(y ~ fe(id1) + fe(id2)), Poisson(), LogLink() ; separation = [:ReLU])
 # don't test on the last ob because it was a singleton instead of a separation
 @test all(df.separated[1:end-1] .== .~res1.esample[1:end-1])
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/05.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/05.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 # add one fixed effect that is basically a intercept, because nlreg won't run without fe
 df.id = ones(size(df,1))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + x3 + x4 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/06.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/06.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 # add one fixed effect that is basically a intercept, because nlreg won't run without fe
 df.id = ones(size(df,1))
@@ -105,71 +105,72 @@ when setting ppmlhdfe sep as sep(ir), the output is:
 (ReLU method dropped 1 separated observation in 2 iterations)
 and the output gives ill results too.
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/07.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/07.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + fe(id1) + fe(id2)), Poisson(), LogLink() ; drop_singletons = false, separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 =# 
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/08.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/08.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + fe(id1) + fe(id2)), Poisson(), LogLink() ; separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/09.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/09.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 # add one fixed effect that is basically a intercept, because nlreg won't run without fe
 df.id = ones(size(df,1))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + x3 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/10.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/10.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 df.id = ones(size(df,1))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + x3 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/11.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/11.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 df.id = ones(size(df,1))
 res1 = nlreg(df, @formula(y ~ x1 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/12.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/12.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 res1 = nlreg(df, @formula(y ~ fe(id1) + fe(id2)), Poisson(), LogLink() ; drop_singletons = false , separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/13.csv"
-df = DataFrame(CSV.File(Downloads.download(url)))
-res1 = nlreg(df, @formula(y ~ fe(id1) + fe(id2)), Poisson(), LogLink() ; drop_singletons = false , separation = [:ReLU])
-@test all(df.separated .== .~res1.esample)
+# original 13 no longer exists
+# url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/13.csv"
+# df = DataFrame(CSV.File(Downloads.download(url)))
+# res1 = nlreg(df, @formula(y ~ fe(id1) + fe(id2)), Poisson(), LogLink() ; drop_singletons = false , separation = [:ReLU])
+# @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/14.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/13.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 df.id = ones(size(df,1))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/15.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/14.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 df.id = ones(size(df,1))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + x3 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/16.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/15.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 df.id = ones(size(df,1))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + x3 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/17.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/16.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 df.id = ones(size(df,1))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + x3 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])
 @test all(df.separated .== .~res1.esample)
 
-url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/test/separation_datasets/18.csv"
+url = "https://raw.githubusercontent.com/sergiocorreia/ppmlhdfe/master/guides/separation_datasets/17.csv"
 df = DataFrame(CSV.File(Downloads.download(url)))
 df.id = ones(size(df,1))
 res1 = nlreg(df, @formula(y ~ x1 + x2 + x3 + fe(id)), Poisson(), LogLink() ; separation = [:ReLU])
